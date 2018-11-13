@@ -3,7 +3,7 @@ import argparse
 import logging
 
 from bushel.scrub import scrub
-from bushel.download import download
+from bushel.scraper import scrape
 
 logging.basicConfig()
 
@@ -22,11 +22,11 @@ parser = argparse.ArgumentParser(
     formatter_class=SubcommandHelpFormatter)
 subparsers = parser.add_subparsers(help="Subcommands")
 
-parser_download = subparsers.add_parser(
-    "download",
+parser_scrape = subparsers.add_parser(
+    "scrape",
     help="Recursively download all documents referenced by the latest consensus"
 )
-parser_download.set_defaults(coro=download)
+parser_scrape.set_defaults(coro=scrape)
 
 parser_scrub = subparsers.add_parser(
     "scrub", help="Check for missing documents in the filesystem storage")
