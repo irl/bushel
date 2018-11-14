@@ -21,6 +21,8 @@ Requirements
 
 * Python 3.7+ (no really, we're using some new asyncio features)
 * [stem](https://stem.torproject.org) 1.7.0+
+* [aiofiles](https://github.com/Tinche/aiofiles)
+* [nose](https://nose.readthedocs.io/en/latest/)
 
 Test Requirements
 -----------------
