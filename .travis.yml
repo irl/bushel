@@ -1,0 +1,8 @@
+language: python
+python:
+ - "3.7-dev"
+ - "nightly"
+install:
+ - pip install -r requirements.txt
+script:
+ - python -m nose --with-doctest bushel
