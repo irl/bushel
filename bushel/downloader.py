@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import random
 import socket
 import urllib.error
 
@@ -53,13 +54,13 @@ def url_for(doctype, fingerprint=None, digest=None):
         if isinstance(fingerprint, str):
             suffix += fingerprint
         else:
-            suffix += "+".join(sorted(fingerprint))
+            suffix += "+".join(sorted(list(fingerprint)))
     else:  # digest must be set
         suffix = "d/"
-        if isinstance(digest, list):
-            suffix += "+".join(sorted(digest))
-        else:
+        if isinstance(digest, str):
             suffix += digest
+        else:
+            suffix += "+".join(sorted(list(digest)))
     if doctype is SERVER_DESCRIPTOR:
         return "/tor/server/" + suffix
     if doctype is EXTRA_INFO_DESCRIPTOR:
@@ -103,6 +104,9 @@ class DirectoryDownloader:
             timeout=5,
             retries=0,
         )
+        self.desired = {}
+        self.in_progress = {}
+        self.already = {}
 
     def _set_endpoints(self, endpoints):
         self.endpoints = endpoints
@@ -196,14 +200,50 @@ class DirectoryDownloader:
         except (urllib.error.URLError, socket.timeout, ValueError):
             LOG.error("Failed to download a vote!")
 
-    async def descriptor(self, doctype, digest=None, endpoint=None, supress=True):
-        async with self.max_concurrency_lock:
-            query = self.downloader.query(
-                url_for(doctype, digest=digest),
-                endpoints=[endpoint] if endpoint else self.endpoints)
-            while not query.is_done:
-                await asyncio.sleep(1)
-            if not supress:
-                query.run()  # This will throw any exceptions, the query is
-                # already done so this doesn't block.
-            return [d for d in query]
+    def _is_desired(self, doctype, digest=None):
+        if doctype in self.desired:
+            if digest in self.desired[doctype]:
+                return True
+        return False
+
+    def _is_in_progress(self, doctype, digest=None):
+        if doctype in self.in_progress:
+            if digest in self.in_progress[doctype]:
+                return True
+        return False
+
+    def _is_already(self, endpoint, doctype, digest=None):
+        if endpoint in self.already:
+            if doctype in self.already[endpoint]:
+                if digest in self.already[endpoint][doctype]:
+                     return True
+        return False
+
+    def descriptor(self, doctype, digest=None, endpoint=None):
+        if isinstance(digest, list):
+            digest = tuple(digest)
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        if endpoint is None:
+            endpoint = random.choice(self.endpoints)
+        if self._is_desired(doctype, digest=digest) or \
+                self._is_in_progress(doctype, digest=digest) or \
+                self._is_already(endpoint, doctype, digest=digest):
+            fut.set_result([])
+            return fut
+        if not doctype in self.desired:
+            self.desired[doctype] = {}
+        self.desired[doctype][digest] = (endpoint, fut)
+        return fut
+
+    async def perform_downloads(self):
+        for doctype in self.desired:
+            for digest in self.desired[doctype]:
+                endpoint, fut = self.desired[doctype][digest]
+                query = self.downloader.query(
+                    url_for(doctype, digest=digest),
+                    endpoints=[endpoint])
+                while not query.is_done:
+                    await asyncio.sleep(1)
+                fut.set_result([d for d in query])
+        self.desired = {}

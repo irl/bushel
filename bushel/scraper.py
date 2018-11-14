@@ -75,6 +75,7 @@ class DirectoryScraper:
             download_tasks.append(
                 self.downloader.descriptor(
                     SERVER_DESCRIPTOR, digest=next_batch, endpoint=endpoint))
+        await self.downloader.perform_downloads()
         for result in await asyncio.gather(*download_tasks):
             for desc in result:
                 await self.archive.store(desc)
@@ -98,6 +99,7 @@ class DirectoryScraper:
             download_tasks.append(
                 self.downloader.descriptor(
                     EXTRA_INFO_DESCRIPTOR, digest=next_batch, endpoint=endpoint))
+        await self.downloader.perform_downloads()
         for result in await asyncio.gather(*download_tasks):
             for desc in result:
                 await self.archive.store(desc)
