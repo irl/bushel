@@ -9,8 +9,8 @@ import urllib.error
 import stem
 from stem.descriptor.remote import DescriptorDownloader
 
+from bushel.archive import DirectoryArchive
 from bushel.downloader import DirectoryDownloader
-from bushel.store import FilesystemStore
 
 LOG = logging.getLogger('')
 
@@ -20,7 +20,7 @@ EXTRA_INFO_DESCRIPTOR = 20
 
 class DirectoryScraper:
     def __init__(self, archive_path):
-        self.archive = FilesystemStore(archive_path)
+        self.archive = DirectoryArchive(archive_path)
         self.downloader = DirectoryDownloader()
 
     async def refresh_consensus(self):

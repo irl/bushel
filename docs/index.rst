@@ -10,6 +10,7 @@ Welcome to bushel's documentation!
    :maxdepth: 2
    :caption: Contents:
 
+   archive
    downloader
    references
 

@@ -13,8 +13,6 @@ from stem import DirPort
 from stem import ORPort
 from stem.descriptor.remote import DescriptorDownloader
 
-from bushel.store import FilesystemStore
-
 DIRECTORY_AUTHORITIES = [
     DirPort("128.31.0.39", 9131),  # moria1
     ORPort("86.59.21.38", 443),  # tor26

@@ -14,10 +14,18 @@ from stem.descriptor.networkstatus import NetworkStatusDocumentV3
 LOG = logging.getLogger('')
 
 
-class FilesystemStore:
+class DirectoryArchive:
     """
-    This class implements the CollecTor filesystem protocol as detailed
-    at https://gitweb.torproject.org/collector.git/tree/src/main/resources/docs/PROTOCOL.
+    Persistent filesystem-backed archive for Tor directory protocol
+    descriptors. This is intended to scale to decades worth of descriptors.
+
+    This class implements a superset of the CollecTor filesystem protocol as
+    detailed in [collector-protocol]_. The additional functionality is used
+    to allow quick retrieval of descriptors by their digest by creating a
+    parallel directory hierachy containing symlinks. The assumption is that
+    the filesystem has better data structures for traversing a hash tree than
+    can be hacked on in the time available for this prototype. This extra
+    functionality may disappear in later versions.
     """
 
     def __init__(self, archive_path):
