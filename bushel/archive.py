@@ -5,8 +5,6 @@ from io import BytesIO
 
 import aiofiles
 
-import stem.descriptor.remote
-from stem.descriptor import DocumentHandler
 from stem.descriptor import parse_file
 from stem.descriptor.server_descriptor import RelayDescriptor
 from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
@@ -21,8 +19,8 @@ SERVER_DESCRIPTOR_MARKER = "server-descriptors"
 EXTRA_INFO_DESCRIPTOR_MARKER = "extra-infos"
 
 MARKERS = {
-  SERVER_DESCRIPTOR: SERVER_DESCRIPTOR_MARKER,
-  EXTRA_INFO_DESCRIPTOR: EXTRA_INFO_DESCRIPTOR_MARKER,
+    SERVER_DESCRIPTOR: SERVER_DESCRIPTOR_MARKER,
+    EXTRA_INFO_DESCRIPTOR: EXTRA_INFO_DESCRIPTOR_MARKER,
 }
 
 class DirectoryArchive:
@@ -89,16 +87,16 @@ class DirectoryArchive:
         return dpath, fpath
 
     def path_for(self, descriptor, create_dir=False):
-        if type(descriptor) is RelayDescriptor:
+        if isinstance(descriptor, RelayDescriptor):
             dpath, fpath = self._descriptor_path(SERVER_DESCRIPTOR_MARKER,
                                                  descriptor.published,
                                                  descriptor.digest())
-        elif type(descriptor) is RelayExtraInfoDescriptor:
+        elif isinstance(descriptor, RelayExtraInfoDescriptor):
             dpath, fpath = self._descriptor_path(EXTRA_INFO_DESCRIPTOR_MARKER,
                                                  descriptor.published,
                                                  descriptor.digest())
-        elif type(descriptor
-                  ) is NetworkStatusDocumentV3 and descriptor.is_consensus:
+        elif isinstance(descriptor, NetworkStatusDocumentV3) and \
+              descriptor.is_consensus:
             dpath, fpath = self._consensus_path(descriptor)
         #elif type(descriptor) is NetworkStatusDocumentV3 and descriptor.is_vote:
         #dpath, fpath = self._vote_path(descriptor)
@@ -139,7 +137,7 @@ class DirectoryArchive:
 
         # stem uses the same class for both consensus and votes so we need
         # to have special logic for that
-        if type(descriptor) is NetworkStatusDocumentV3:
+        if isinstance(descriptor, NetworkStatusDocumentV3):
             if descriptor.is_consensus:
                 return b"network-status-consensus-3 1.0"
             elif descriptor.is_vote:
@@ -156,8 +154,7 @@ class DirectoryArchive:
         type_annotation = self._type_annotation_for(descriptor)
         if type_annotation is not None:
             return b"@type " + type_annotation + b"\r\n" + content
-        else:
-            return content
+        return content
 
     async def store(self, descriptor):
         path = self.path_for(descriptor, create_dir=True)

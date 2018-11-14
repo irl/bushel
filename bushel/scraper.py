@@ -1,13 +1,8 @@
-import pickle
 import asyncio
 import collections
 import logging
-import socket
-import sys
-import urllib.error
 
 import stem
-from stem.descriptor.remote import DescriptorDownloader
 
 from bushel import SERVER_DESCRIPTOR
 from bushel import EXTRA_INFO_DESCRIPTOR
@@ -19,6 +14,7 @@ LOG = logging.getLogger('')
 
 class DirectoryScraper:
     def __init__(self, archive_path):
+        self.consensus = None
         self.archive = DirectoryArchive(archive_path)
         self.downloader = DirectoryDownloader()
 
@@ -48,7 +44,7 @@ class DirectoryScraper:
                 wanted_digests.append(desc.digest)
             else:
                 server_descriptors.append(server_descriptor)
-        while len(wanted_digests) > 0:
+        while wanted_digests:
             next_batch = [
                 wanted_digests.popleft() for _i in range(
                     min(
@@ -72,7 +68,7 @@ class DirectoryScraper:
         download_tasks.clear()
 
         # Download extra info descriptors
-        while len(wanted_digests) > 0:
+        while wanted_digests:
             next_batch = [
                 wanted_digests.popleft() for _i in range(
                     min(

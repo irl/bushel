@@ -1,16 +1,10 @@
 import asyncio
-import collections
 import logging
 import socket
-import sys
-import traceback
 import urllib.error
-
-from random import randint
 
 import stem
 from stem import DirPort
-from stem import ORPort
 from stem.descriptor.remote import DescriptorDownloader
 
 from bushel import DIRECTORY_AUTHORITIES
@@ -116,8 +110,8 @@ class DirectoryDownloader:
 
     def authorities(self):
         """
-        Usually returns a list containing either a DirPort or an ORPort for
-        each of the directory authorities.
+        Usually returns a list containing either a :py:class:`~stem.DirPort` or
+        an :py:class:`~stem.ORPort` for each of the directory authorities.
 
         If endpoints have been manually set and the list of endpoints does not
         contain a known directory authority, then the list of endpoints is

@@ -22,7 +22,7 @@ class TestDirectoryDownloader:
         try:
             query = get_consensus(endpoints=[LOCAL_DIRECTORY_CACHE], retries=0)
             query.run()
-        except urllib.error.URLError as e:
+        except urllib.error.URLError:
             self.has_local_directory_cache = False
         self.downloader = DirectoryDownloader(endpoints=[LOCAL_DIRECTORY_CACHE])
 
