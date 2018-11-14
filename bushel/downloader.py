@@ -85,8 +85,10 @@ def resource_url(doctype, fingerprint=None, digest=None):
 
 class DirectoryDownloader:
     """
-    The :py:class:`DirectoryDownloader` provides an asyncio-compatible
-    wrapper around the stem DescriptorDownloader, with two modes of operation:
+    The :py:class:`DirectoryDownloader` provides an
+    :py:mod:`asyncio`-compatible wrapper around the stem
+    :py:class:`~stem.descriptor.remote.DescriptorDownloader`, with two modes of
+    operation:
 
     * Directory Cache ([dir-spec]_ §4)
     * Client ([dir-spec]_ §5)
@@ -134,22 +136,38 @@ class DirectoryDownloader:
         """
         for authority in DIRECTORY_AUTHORITIES:
             if authority in self.endpoints:
-                return DIRECTORY_AUTHORITIES
+                return DIRECTORY_AUTHORITIES.copy()
         return self.endpoints
 
-    def directory_caches(self):
+    def directory_caches(self, extra_info=False):
         """
         Usually returns a list containing either a DirPort or an ORPort for
         each of the directory caches known from the latest consensus. If no
         consensus is known, this will return
-        :py:func:`DirectoryDownloader.authorities()` instead.
+        :py:meth:`~DirectoryDownloader.authorities()` instead.
 
         If endpoints have been manually set and the list of endpoints does not
         contain a known directory authority, then the list of endpoints is
         returned instead. This is to allow for testing with a local directory
         cache, or in testing networks.
+
+        :param bool extra_info: Whether the list returned should contain only
+                                directory caches that cache extra-info
+                                descriptors.
         """
-        raise NotImplementedError()
+        if self.current_consensus is None:
+            # TODO: Check also that it's fresh!
+            return self.authorities()
+        for authority in DIRECTORY_AUTHORITIES:
+            if authority in self.endpoints:
+                directory_caches = DIRECTORY_AUTHORITIES.copy()
+                for router in self.current_consensus.routers.entries():
+                    if stem.Flag.V2DIR in router.flags and \
+                          (not extra_info or router.extra_info_cache):
+                        directory_caches.append(
+                            DirPort(router.address, router.dir_port))
+                return directory_caches
+        return DIRECTORY_AUTHORITIES.copy()
 
     def _consensus_is_fresh(self):
         """
