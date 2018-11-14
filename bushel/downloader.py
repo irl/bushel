@@ -176,12 +176,13 @@ class DirectoryDownloader:
         except (urllib.error.URLError, socket.timeout, ValueError) as e:
             LOG.error("Failed to download a consensus!")
 
-    async def descriptor(self, doctype, digest=None, endpoint=None):
+    async def descriptor(self, doctype, digest=None, endpoint=None, supress=True):
         async with self.max_concurrency_lock:
             query = self.downloader.query(
                 resource_url(doctype, digest=digest),
                 endpoints=[endpoint] if endpoint else self.endpoints)
             while not query.is_done:
                 await asyncio.sleep(1)
-            #query.run()
+            if not supress:
+                query.run()
             return [d for d in query]
