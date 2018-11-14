@@ -103,8 +103,8 @@ class DirectoryDownloader:
               for a consensus.
 
     .. warning:: Switching between directory cache and client modes clears the
-                 state that records which servers have been queries for
-                 descriptors and will allow another request to be made. Ensure
+                 state that records which servers have been queried for
+                 descriptors and should not have further requests made. Ensure
                  that you are not switching modes too often.
     """
 
