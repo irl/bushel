@@ -1,5 +1,6 @@
 import asyncio
 import collections
+import datetime
 import logging
 
 import stem
@@ -19,11 +20,17 @@ class DirectoryScraper:
         self.downloader = DirectoryDownloader()
 
     async def refresh_consensus(self):
-        consensus = await self.downloader.consensus()
-        if consensus is None:
-            return
-        self.consensus = consensus
-        await self.archive.store(consensus)
+        if self.consensus is None:
+            self.consensus = await self.archive.consensus()
+        # TODO: Use the check built in to stem once it exists
+        # https://trac.torproject.org/projects/tor/ticket/28448
+        if not self.consensus or \
+                datetime.datetime.utcnow() > self.consensus.valid_until:
+            consensus = await self.downloader.consensus()
+            if consensus is None:
+                return
+            self.consensus = consensus
+            await self.archive.store(consensus)
         await self._recurse_consensus_references()
 
     async def _recurse_consensus_references(self):
