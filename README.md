@@ -1,6 +1,8 @@
 bushel
 ======
 
+[![Build Status](https://travis-ci.org/irl/bushel.svg?branch=master)](https://travis-ci.org/irl/bushel)
+
 *A bushel of onions is 57 lbs*
 
 **WARNING: bushel is under active development and may look completely different
