@@ -160,7 +160,7 @@ class DirectoryDownloader:
         """
         raise NotImplementedError()
 
-    async def consensus(self, endpoint=None):
+    async def consensus(self, endpoint=None, supress=True):
         query = self.downloader.get_consensus(
             document_handler=stem.descriptor.DocumentHandler.DOCUMENT,
             endpoints=[endpoint] if endpoint else self.authorities())
@@ -169,11 +169,13 @@ class DirectoryDownloader:
             await asyncio.sleep(1)
         LOG.debug("Consensus download completed successfully")
         try:
-            result = query.run()  # This will throw any exceptions, the query
-            # is already done so this doesn't block.
-            self.current_consensus = result[0]
-            return result[0]
-        except (urllib.error.URLError, socket.timeout, ValueError) as e:
+            if not supress:
+                query.run()  # This will throw any exceptions, the
+                # query is already done so this doesn't block.
+            for consensus in query:
+                self.current_consensus = consensus
+                return consensus
+        except (urllib.error.URLError, socket.timeout, ValueError):
             LOG.error("Failed to download a consensus!")
 
     async def descriptor(self, doctype, digest=None, endpoint=None, supress=True):
@@ -184,5 +186,6 @@ class DirectoryDownloader:
             while not query.is_done:
                 await asyncio.sleep(1)
             if not supress:
-                query.run()
+                query.run()  # This will throw any exceptions, the query is
+                # already done so this doesn't block.
             return [d for d in query]

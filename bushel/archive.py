@@ -1,3 +1,4 @@
+import datetime
 import os
 import os.path
 import logging
@@ -6,6 +7,7 @@ from io import BytesIO
 import aiofiles
 
 from stem.descriptor import parse_file
+from stem.descriptor import DocumentHandler
 from stem.descriptor.server_descriptor import RelayDescriptor
 from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
 from stem.descriptor.networkstatus import NetworkStatusDocumentV3
@@ -97,7 +99,7 @@ class DirectoryArchive:
                                                  descriptor.digest())
         elif isinstance(descriptor, NetworkStatusDocumentV3) and \
               descriptor.is_consensus:
-            dpath, fpath = self._consensus_path(descriptor)
+            dpath, fpath = self._consensus_path(descriptor.valid_after)
         #elif type(descriptor) is NetworkStatusDocumentV3 and descriptor.is_vote:
         #dpath, fpath = self._vote_path(descriptor)
         else:
@@ -118,14 +120,16 @@ class DirectoryArchive:
         fpath = os.path.join(dpath, f"{digest}")
         return dpath, fpath
 
-    def _consensus_path(self, consensus):
-        va = consensus.valid_after
+    def _consensus_path(self, valid_after):
         dpath = os.path.join(
             self.archive_path, "relay-descriptors", "consensuses",
-            f"consensuses-{va.year}-{va.month:02d}", f"{va.day}")
+            f"consensuses-{valid_after.year}-{valid_after.month:02d}",
+            f"{valid_after.day}")
         fpath = os.path.join(
             dpath,
-            f"{va.year}-{va.month:02d}-{va.day:02d}-{va.hour:02d}-{va.minute:02d}-{va.second:02d}-consensus"
+            (f"{valid_after.year}-{valid_after.month:02d}-"
+             f"{valid_after.day:02d}-{valid_after.hour:02d}-"
+             f"{valid_after.minute:02d}-{valid_after.second:02d}-consensus")
         )
         return dpath, fpath
 
@@ -165,6 +169,31 @@ class DirectoryArchive:
             digest_path = self.digest_path_for(descriptor, "sha1", create_dir=True)
             # TODO: Make the symlink async
             os.symlink(os.path.abspath(path), digest_path)
+
+    async def consensus(self, valid_after=None):
+        """
+        Retrieves a consensus from the archive.
+
+        :param datetime valid_after: If set, will retrieve a consensus with the
+                                     given valid_after time, otherwise a
+                                     consensus that became valid at the top
+                                     of the current hour will be retrieved.
+        """
+        if valid_after is None:
+            valid_after = datetime.datetime.utcnow()
+            valid_after = valid_after.replace(minute=0, second=0)
+        _, path = self._consensus_path(valid_after)
+        try:
+            async with aiofiles.open(path, 'rb') as source:
+                raw_content = await source.read()
+                # TODO: We use BytesIO here because it's not clear to me how
+                # to parse a string to get a descriptor instead of a file.
+                desc = BytesIO(raw_content)
+                return next(parse_file(desc,
+                    document_handler=DocumentHandler.DOCUMENT))
+        except FileNotFoundError:
+            LOG.debug("The file was not present in the store.")
+            return None
 
     async def descriptor(self, doctype, digest=None, published_hint=None):
         if self.legacy_archive:
