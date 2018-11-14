@@ -9,13 +9,12 @@ import urllib.error
 import stem
 from stem.descriptor.remote import DescriptorDownloader
 
+from bushel import SERVER_DESCRIPTOR
+from bushel import EXTRA_INFO_DESCRIPTOR
 from bushel.archive import DirectoryArchive
 from bushel.downloader import DirectoryDownloader
 
 LOG = logging.getLogger('')
-
-SERVER_DESCRIPTOR = 10
-EXTRA_INFO_DESCRIPTOR = 20
 
 
 class DirectoryScraper:
@@ -28,7 +27,7 @@ class DirectoryScraper:
         if consensus is None:
             return
         self.consensus = consensus
-        self.archive.store(consensus)
+        await self.archive.store(consensus)
         await self._recurse_consensus_references()
 
     async def _recurse_consensus_references(self):
@@ -42,7 +41,9 @@ class DirectoryScraper:
         # Download server descriptors
         server_descriptors = []
         for desc in self.consensus.routers.values():
-            server_descriptor = self.archive.server_descriptor(desc.digest)
+            server_descriptor = await self.archive.descriptor(
+                SERVER_DESCRIPTOR,
+                digest=desc.digest)
             if server_descriptor is None:
                 wanted_digests.append(desc.digest)
             else:
@@ -59,11 +60,12 @@ class DirectoryScraper:
                     SERVER_DESCRIPTOR, digest=next_batch))
         for result in await asyncio.gather(*download_tasks):
             for desc in result:
-                self.archive.store(desc)
+                await self.archive.store(desc)
                 server_descriptors.append(desc)
         for desc in server_descriptors:
-            if desc.extra_info_digest and desc.extra_info_digest:
-                extra_info_descriptor = self.archive.extra_info_descriptor(
+            if desc.extra_info_digest:
+                extra_info_descriptor = await self.archive.descriptor(
+                    EXTRA_INFO_DESCRIPTOR,
                     desc.extra_info_digest)
                 if extra_info_descriptor is None:
                     wanted_digests.append(desc.extra_info_digest)
@@ -82,7 +84,7 @@ class DirectoryScraper:
                     EXTRA_INFO_DESCRIPTOR, digest=next_batch))
         for result in await asyncio.gather(*download_tasks):
             for desc in result:
-                self.archive.store(desc)
+                await self.archive.store(desc)
 
         print("All done")
 

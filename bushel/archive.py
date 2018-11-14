@@ -1,18 +1,29 @@
 import os
 import os.path
 import logging
+from io import BytesIO
+
+import aiofiles
 
 import stem.descriptor.remote
-
 from stem.descriptor import DocumentHandler
 from stem.descriptor import parse_file
-
 from stem.descriptor.server_descriptor import RelayDescriptor
 from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
 from stem.descriptor.networkstatus import NetworkStatusDocumentV3
 
+from bushel import SERVER_DESCRIPTOR
+from bushel import EXTRA_INFO_DESCRIPTOR
+
 LOG = logging.getLogger('')
 
+SERVER_DESCRIPTOR_MARKER = "server-descriptors"
+EXTRA_INFO_DESCRIPTOR_MARKER = "extra-infos"
+
+MARKERS = {
+  SERVER_DESCRIPTOR: SERVER_DESCRIPTOR_MARKER,
+  EXTRA_INFO_DESCRIPTOR: EXTRA_INFO_DESCRIPTOR_MARKER,
+}
 
 class DirectoryArchive:
     """
@@ -28,16 +39,35 @@ class DirectoryArchive:
     functionality may disappear in later versions.
     """
 
-    def __init__(self, archive_path):
+    def __init__(self, archive_path, legacy_archive=False):
+        """
+        Hi.
+
+        :param str archive_path: Either an absolute or relative path to the
+                                 location of the directory to use for the
+                                 archive. This location must exist, but may
+                                 be an empty directory.
+        :param bool legacy_archive: If True, disables the use of symlinks for
+                                    faster descriptor retrieval.
+        """
         self.archive_path = archive_path
+        self.legacy_archive = legacy_archive
 
     def digest_path_for(self, descriptor, algo="sha1", create_dir=False):
+        if self.legacy_archive:
+            raise RuntimeError("Cannot get a digest path for descriptors in a "
+                               "legacy archive.")
+        if algo == "sha1":
+            digest = descriptor.digest()
+        else:
+            raise RuntimeError(
+                "Unknown digest algorithm requested for symlink path")
         if isinstance(descriptor, RelayDescriptor):
-            dpath, fpath = self._relay_descriptor_digest_path(
-                descriptor, "server-descriptors", algo)
+            dpath, fpath = self._descriptor_digest_path(
+                SERVER_DESCRIPTOR_MARKER, algo, digest)
         elif isinstance(descriptor, RelayExtraInfoDescriptor):
-            dpath, fpath = self._relay_descriptor_digest_path(
-                descriptor, "extra-infos", algo)
+            dpath, fpath = self._descriptor_digest_path(
+                EXTRA_INFO_DESCRIPTOR_MARKER, algo, digest)
         elif isinstance(descriptor, NetworkStatusDocumentV3) \
               and descriptor.is_consensus:
             dpath, fpath = "/tmp", "/tmp/consensus"
@@ -50,12 +80,8 @@ class DirectoryArchive:
             os.makedirs(dpath, exist_ok=True)
         return fpath
 
-    def _relay_descriptor_digest_path(self, descriptor, marker, algo):
-        if algo == "sha1":
-            digest = descriptor.digest().lower()
-        else:
-            raise RuntimeError(
-                "Unknown digest algorithm requested for symlink path")
+    def _descriptor_digest_path(self, marker, algo, digest):
+        digest = digest.lower()
         dpath = os.path.join(self.archive_path, "relay-descriptors",
                              f"{marker}", f"by-{algo}",
                              *[f"{digest[i]}" for i in range(0, 10)])
@@ -64,11 +90,13 @@ class DirectoryArchive:
 
     def path_for(self, descriptor, create_dir=False):
         if type(descriptor) is RelayDescriptor:
-            dpath, fpath = self._relay_descriptor_path(descriptor,
-                                                       "server-descriptors")
+            dpath, fpath = self._descriptor_path(SERVER_DESCRIPTOR_MARKER,
+                                                 descriptor.published,
+                                                 descriptor.digest())
         elif type(descriptor) is RelayExtraInfoDescriptor:
-            dpath, fpath = self._relay_descriptor_path(descriptor,
-                                                       "extra-infos")
+            dpath, fpath = self._descriptor_path(EXTRA_INFO_DESCRIPTOR_MARKER,
+                                                 descriptor.published,
+                                                 descriptor.digest())
         elif type(descriptor
                   ) is NetworkStatusDocumentV3 and descriptor.is_consensus:
             dpath, fpath = self._consensus_path(descriptor)
@@ -83,12 +111,11 @@ class DirectoryArchive:
             os.makedirs(dpath, exist_ok=True)
         return fpath
 
-    def _relay_descriptor_path(self, descriptor, marker):
-        pub = descriptor.published
-        digest = descriptor.digest().lower()
+    def _descriptor_path(self, marker, published, digest):
+        digest = digest.lower()
         dpath = os.path.join(self.archive_path, "relay-descriptors",
                              f"{marker}",
-                             f"{marker}-{pub.year}-{pub.month:02d}",
+                             f"{marker}-{published.year}-{published.month:02d}",
                              f"{digest[0]}", f"{digest[1]}")
         fpath = os.path.join(dpath, f"{digest}")
         return dpath, fpath
@@ -132,31 +159,29 @@ class DirectoryArchive:
         else:
             return content
 
-    def store(self, descriptor):
+    async def store(self, descriptor):
         path = self.path_for(descriptor, create_dir=True)
-        with open(path, 'wb') as output:
-            output.write(self.prepare_annotated_content(descriptor))
-        digest_path = self.digest_path_for(descriptor, "sha1", create_dir=True)
-        os.symlink(os.path.abspath(path), digest_path)
+        async with aiofiles.open(path, 'wb') as output:
+            await output.write(self.prepare_annotated_content(descriptor))
+        if not isinstance(descriptor, NetworkStatusDocumentV3):
+            # TODO: Create symlinks for descriptors too
+            digest_path = self.digest_path_for(descriptor, "sha1", create_dir=True)
+            # TODO: Make the symlink async
+            os.symlink(os.path.abspath(path), digest_path)
 
-    def server_descriptor(self, digest=None):
-        fake = RelayDescriptor("")
-        fake.digest = lambda: digest
-        path = self.digest_path_for(fake)
+    async def descriptor(self, doctype, digest=None, published_hint=None):
+        if self.legacy_archive:
+            # TODO: Check earlier days too
+            _, path = self._descriptor_path(MARKERS[doctype], digest, published_hint)
+        else:
+            _, path = self._descriptor_digest_path(MARKERS[doctype], "sha1", digest)
         try:
-            with open(path, 'rb') as source:
-                return next(parse_file(path))
-        except FileNotFoundError:
-            LOG.debug("The file was not present in the store.")
-            return None
-
-    def extra_info_descriptor(self, digest=None):
-        fake = RelayExtraInfoDescriptor("")
-        fake.digest = lambda: digest
-        path = self.digest_path_for(fake)
-        try:
-            with open(path, 'rb') as source:
-                return next(parse_file(path))
+            async with aiofiles.open(path, 'rb') as source:
+                raw_content = await source.read()
+                # TODO: We use BytesIO here because it's not clear to me how
+                # to parse a string to get a descriptor instead of a file.
+                desc = BytesIO(raw_content)
+                return next(parse_file(desc))
         except FileNotFoundError:
             LOG.debug("The file was not present in the store.")
             return None
