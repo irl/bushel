@@ -146,8 +146,8 @@ class DirectoryDownloader:
             if authority in self.endpoints:
                 directory_caches = DIRECTORY_AUTHORITIES.copy()
                 for router in self.current_consensus.routers.entries():
-                    if stem.Flag.V2DIR in router.flags and \
-                          (not extra_info or router.extra_info_cache):
+                    if stem.Flag.V2DIR in router.flags and ( # pylint: disable=no-member
+                            not extra_info or router.extra_info_cache):
                         directory_caches.append(
                             DirPort(router.address, router.dir_port))
                 return directory_caches
@@ -162,7 +162,7 @@ class DirectoryDownloader:
 
     async def consensus(self, endpoint=None, supress=True):
         query = self.downloader.get_consensus(
-            document_handler=stem.descriptor.DocumentHandler.DOCUMENT,
+            document_handler=stem.descriptor.DocumentHandler.DOCUMENT, # pylint: disable=no-member
             endpoints=[endpoint] if endpoint else self.authorities())
         LOG.debug("Started consensus download")
         while not query.is_done:

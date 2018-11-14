@@ -11,17 +11,17 @@ def scrub(path):
     with stem.descriptor.reader.DescriptorReader(
             [path], document_handler=DocumentHandler.DOCUMENT) as reader: # pylint: disable=no-member
         for descriptor in reader:
-            va = descriptor.valid_after
+            valid_after = descriptor.valid_after
             print(
-                term.format(f"Found a consensus, valid-after {va}", 'bg_red'))
+                term.format(f"Found a consensus, valid-after {valid_after}", 'bg_red'))
             if descriptor.get_unrecognized_lines():
-                print(f"WARNING: Consensus {va} contained unrecognized lines "
+                print(f"WARNING: Consensus {valid_after} contained unrecognized lines "
                       "that stem did not parse.")
             for status in descriptor.routers.values():
                 digest = status.digest.lower()
                 path = os.path.join(
                     "relay-descriptors", "server-descriptors",
-                    f"server-descriptors-{va.year}-{va.month}", f"{digest[0]}",
+                    f"server-descriptors-{valid_after.year}-{valid_after.month}", f"{digest[0]}",
                     f"{digest[1]}", f"{digest}")
                 # TODO: Check last month
                 try:
@@ -40,7 +40,7 @@ def scrub(path):
                 if server.extra_info_digest:
                     digest = server.extra_info_digest.lower()
                     path = os.path.join("relay-descriptors", "extra-infos",
-                                        f"extra-infos-{va.year}-{va.month}",
+                                        f"extra-infos-{valid_after.year}-{valid_after.month}",
                                         f"{digest[0]}", f"{digest[1]}",
                                         f"{digest}")
                     try:

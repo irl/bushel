@@ -150,8 +150,7 @@ class DirectoryArchive:
                 raise RuntimeError(
                     "It's a network status but not a consensus or vote?")
 
-        if type(descriptor) in annotations:
-            return annotations[type(descriptor)]
+        return annotations.get(type(descriptor), None)
 
     def prepare_annotated_content(self, descriptor):
         content = descriptor.get_bytes()
@@ -190,7 +189,7 @@ class DirectoryArchive:
                 # to parse a string to get a descriptor instead of a file.
                 desc = BytesIO(raw_content)
                 return next(parse_file(desc,
-                    document_handler=DocumentHandler.DOCUMENT))
+                                       document_handler=DocumentHandler.DOCUMENT)) # pylint: disable=no-member
         except FileNotFoundError:
             LOG.debug("The file was not present in the store.")
             return None
