@@ -15,20 +15,20 @@ LOG = logging.getLogger('')
 
 
 
-def resource_url(doctype, fingerprint=None, digest=None):
+def url_for(doctype, fingerprint=None, digest=None):
     """
     Builds a URL to be used to download a resource.
 
     To fetch all available server descriptors, for example (please don't do
     this regularly unless using your own local directory cache):
 
-    >>> resource_url(SERVER_DESCRIPTOR)
+    >>> url_for(SERVER_DESCRIPTOR)
     '/tor/server/all'
 
     To fetch a specific server descriptor, you can specify a *fingerprint* or
     a *digest*:
 
-    >>> resource_url(SERVER_DESCRIPTOR,
+    >>> url_for(SERVER_DESCRIPTOR,
     ...              fingerprint="CF0CC69DE1E7E75A2D995FD8D9FA7D20983531DA")
     '/tor/server/fp/CF0CC69DE1E7E75A2D995FD8D9FA7D20983531DA'
 
@@ -41,7 +41,7 @@ def resource_url(doctype, fingerprint=None, digest=None):
     always produce the same URL (although the sorting algorithm may change
     between releases).
 
-    >>> resource_url(SERVER_DESCRIPTOR,
+    >>> url_for(SERVER_DESCRIPTOR,
     ...              fingerprint=["E59CC0060074E14CA8E9469999B862C5E1CE49E9",
     ...                           "CF0CC69DE1E7E75A2D995FD8D9FA7D20983531DA"])
     '/tor/server/fp/CF0CC69DE1E7E75A2D995FD8D9FA7D20983531DA+E59CC0060074E14CA8E9469999B862C5E1CE49E9'
@@ -50,10 +50,10 @@ def resource_url(doctype, fingerprint=None, digest=None):
         suffix = "all"
     elif fingerprint is not None:
         suffix = "fp/"
-        if isinstance(fingerprint, list):
-            suffix += "+".join(sorted(fingerprint))
-        else:
+        if isinstance(fingerprint, str):
             suffix += fingerprint
+        else:
+            suffix += "+".join(sorted(fingerprint))
     else:  # digest must be set
         suffix = "d/"
         if isinstance(digest, list):
@@ -181,7 +181,7 @@ class DirectoryDownloader:
     async def descriptor(self, doctype, digest=None, endpoint=None, supress=True):
         async with self.max_concurrency_lock:
             query = self.downloader.query(
-                resource_url(doctype, digest=digest),
+                url_for(doctype, digest=digest),
                 endpoints=[endpoint] if endpoint else self.endpoints)
             while not query.is_done:
                 await asyncio.sleep(1)
