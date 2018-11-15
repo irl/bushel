@@ -16,6 +16,10 @@ Welcome to bushel's documentation!
    downloader
    references
 
+During initial development, the latest draft of the requirements and design
+specification can be found `here
+<https://people.torproject.org/~irl/volatile/modern-collector.pdf>`_.
+
 Indices and tables
 ==================
 
