@@ -6,6 +6,8 @@
 Welcome to bushel's documentation!
 ==================================
 
+.. image:: _static/localonions.png
+
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
