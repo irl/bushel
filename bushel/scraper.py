@@ -2,6 +2,7 @@ import asyncio
 import collections
 import datetime
 import logging
+import random
 
 import stem
 
@@ -35,7 +36,9 @@ class DirectoryScraper:
         await self._recurse_network_status_references(self.consensus)
 
     async def fetch_votes(self, next_vote=False):
-        for authority in DIRECTORY_AUTHORITIES:
+        authorities = DIRECTORY_AUTHORITIES.copy()
+        random.shuffle(authorities)
+        for authority in authorities:
             # TODO: This will return the current vote even if we want the next
             # vote
             vote = await self.archive.vote(authority.v3ident)
@@ -45,20 +48,25 @@ class DirectoryScraper:
                 if vote is None:
                     continue
                 await self.archive.store(vote)
-            await self._recurse_network_status_references(vote)
+            await self._recurse_network_status_references(vote,
+                                                          endpoint=authority.dir_port)
 
-    async def _recurse_network_status_references(self, network_status):
+    async def _recurse_network_status_references(self, network_status, endpoint=None):
         wanted_digests = collections.deque()
         download_tasks = []
-        endpoint = None
 
         if network_status.is_consensus:
-            for authority in self.consensus.directory_authorities:
-                # TODO: Download all votes
-                pass
-        else:
-            endpoint = stem.DirPort(network_status.directory_authorities[0].address,
-                                    network_status.directory_authorities[0].dir_port)
+            authorities = [a for a in network_status.directory_authorities]
+            random.shuffle(authorities)
+            for authority in authorities:
+                vote = await self.archive.vote(authority.v3ident,
+                                               digest=authority.vote_digest,
+                                               valid_after=network_status.valid_after)
+                if not vote:
+                    vote = await self.downloader.vote(digest=authority.vote_digest)
+                    if vote:
+                        await self.archive.store(vote)
+                await self._recurse_network_status_references(vote)
 
         # Download server descriptors
         server_descriptors = []

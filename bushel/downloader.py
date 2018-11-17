@@ -183,9 +183,12 @@ class DirectoryDownloader:
         except (urllib.error.URLError, socket.timeout, ValueError):
             LOG.error("Failed to download a consensus!")
 
-    async def vote(self, endpoint=None, next_vote=False, supress=True):
-        query = self.downloader.query(
-            f"/tor/status-vote/{'next' if next_vote else 'current'}/authority",
+    async def vote(self, endpoint=None, digest=None, next_vote=False, supress=True):
+        if digest:
+            url = f"/tor/status-vote/current/d/{digest}"
+        else:
+            url = f"/tor/status-vote/{'next' if next_vote else 'current'}/authority"
+        query = self.downloader.query(url,
             document_handler=stem.descriptor.DocumentHandler.DOCUMENT, # pylint: disable=no-member
             endpoints=[endpoint] if endpoint else self.authorities())
         LOG.debug("Started consensus download")
