@@ -6,6 +6,7 @@ descriptors.
 import asyncio
 import datetime
 import functools
+import glob
 import hashlib
 import io
 import logging
@@ -42,6 +43,13 @@ async def parse_file(*args, **kwargs):
     return await loop.run_in_executor(None,
                                       functools.partial(stem_parse_file,
                                                         *args, **kwargs))
+
+async def aglob(pathname, recursive=False):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None,
+                                      functools.partial(glob.glob,
+                                                        pathname,
+                                                        recursive=recursive))
 
 def _type_annotation_for(descriptor):
     # This functionality is now implemented in stem, just keeping it around
@@ -206,17 +214,6 @@ class DirectoryArchive:
              f"{valid_after.minute:02d}-{valid_after.second:02d}-consensus"))
         return dpath, fpath
 
-    def _vote_path(self, valid_after, fingerprint, digest):
-        dpath = os.path.join(self.archive_path, "relay-descriptors", "vote",
-                             f"{valid_after.year}", f"{valid_after.month}",
-                             f"{valid_after.day}")
-        fpath = os.path.join(
-            dpath, (f"{valid_after.year}-{valid_after.month:02d}-"
-                    f"{valid_after.day:02d}-{valid_after.hour:02d}-"
-                    f"{valid_after.minute:02d}-{valid_after.second:02d}-vote-"
-                    f"{fingerprint}-{digest}"))
-        return dpath, fpath
-
     async def store(self, descriptor):
         path = self.path_for(descriptor, create_dir=True)
         async with self.max_file_concurrency_lock:
@@ -228,6 +225,53 @@ class DirectoryArchive:
                     descriptor, "sha1", create_dir=True)
                 # TODO: Make the symlink async
                 os.symlink(os.path.abspath(path), digest_path)
+
+    def _vote_path(self, valid_after, v3ident, digest):
+        dpath = os.path.join(self.archive_path, "relay-descriptors", "vote",
+                             f"{valid_after.year}", f"{valid_after.month}",
+                             f"{valid_after.day}")
+        fpath = os.path.join(
+            dpath, (f"{valid_after.year}-{valid_after.month:02d}-"
+                    f"{valid_after.day:02d}-{valid_after.hour:02d}-"
+                    f"{valid_after.minute:02d}-{valid_after.second:02d}-vote-"
+                    f"{v3ident}-{digest}"))
+        return dpath, fpath
+
+    async def vote(self, v3ident, digest="*", valid_after=None):
+        """
+        Retrieves a vote from the archive.
+
+        :param str v3ident: The v3ident of the authority that created the vote.
+        :param str digest: A hex-encoded digest of the vote. If set to "*" then
+                           a vote, but only one vote, will be returned if any
+                           vote is available for the given v3ident and
+                           valid_after time.
+        :param datetime valid_after: If set, will retrieve a consensus with the
+                                     given valid_after time, otherwise a
+                                     consensus that became valid at the top
+                                     of the current hour will be retrieved.
+        """
+        if valid_after is None:
+            valid_after = datetime.datetime.utcnow()
+            valid_after = valid_after.replace(minute=0, second=0)
+        _, path = self._vote_path(valid_after, v3ident, digest)
+        if digest == "*":
+            try:
+                path = (await aglob(path))[0]
+            except IndexError:
+                LOG.debug("The file was not present in the store.")
+                return None
+        try:
+            async with self.max_file_concurrency_lock:
+                async with aiofiles.open(path, 'rb') as source:
+                    raw_content = await source.read()
+                return next(
+                    await parse_bytes(
+                        raw_content,
+                        document_handler=DocumentHandler.DOCUMENT)) # pylint: disable=no-member
+        except FileNotFoundError:
+            LOG.debug("The file was not present in the store.")
+            return None
 
     async def consensus(self, valid_after=None):
         """

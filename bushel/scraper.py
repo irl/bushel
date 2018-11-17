@@ -36,10 +36,15 @@ class DirectoryScraper:
 
     async def fetch_votes(self, next_vote=False):
         for authority in DIRECTORY_AUTHORITIES:
-            vote = await self.downloader.vote(endpoint=authority, next_vote=next_vote)
+            # TODO: This will return the current vote even if we want the next
+            # vote
+            vote = await self.archive.vote(authority.v3ident)
             if vote is None:
-                continue
-            await self.archive.store(vote)
+                vote = await self.downloader.vote(endpoint=authority.dir_port,
+                                                  next_vote=next_vote)
+                if vote is None:
+                    continue
+                await self.archive.store(vote)
             await self._recurse_network_status_references(vote)
 
     async def _recurse_network_status_references(self, network_status):

@@ -99,7 +99,7 @@ class DirectoryDownloader:
                  max_concurrency=5):
         self.max_concurrency_lock = asyncio.BoundedSemaphore(max_concurrency)
         self.current_consensus = initial_consensus
-        self._set_endpoints(endpoints or DIRECTORY_AUTHORITIES)
+        self._set_endpoints(endpoints or [a.dir_port for a in DIRECTORY_AUTHORITIES])
         self.downloader = DescriptorDownloader(
             timeout=5,
             retries=0,
@@ -123,8 +123,9 @@ class DirectoryDownloader:
         cache, or in testing networks.
         """
         for authority in DIRECTORY_AUTHORITIES:
-            if authority in self.endpoints:
-                return DIRECTORY_AUTHORITIES.copy()
+            if authority.dir_port in self.endpoints or \
+                  authority.or_port in self.endpoints:
+                return [a.dir_port for a in DIRECTORY_AUTHORITIES.copy()]
         return self.endpoints
 
     def directory_caches(self, extra_info=False):
@@ -148,14 +149,14 @@ class DirectoryDownloader:
             return self.authorities()
         for authority in DIRECTORY_AUTHORITIES:
             if authority in self.endpoints:
-                directory_caches = DIRECTORY_AUTHORITIES.copy()
+                directory_caches = [a.dir_port for a in DIRECTORY_AUTHORITIES]
                 for router in self.current_consensus.routers.entries():
                     if stem.Flag.V2DIR in router.flags and ( # pylint: disable=no-member
                             not extra_info or router.extra_info_cache):
                         directory_caches.append(
                             DirPort(router.address, router.dir_port))
                 return directory_caches
-        return DIRECTORY_AUTHORITIES.copy()
+        return [a.dir_port for a in DIRECTORY_AUTHORITIES]
 
     def _consensus_is_fresh(self):
         """
