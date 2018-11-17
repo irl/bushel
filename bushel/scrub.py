@@ -1,11 +1,6 @@
 import asyncio
-import functools
-import io
-import json
 import logging
 import os
-
-import aiofiles
 
 import stem
 import stem.descriptor.reader
