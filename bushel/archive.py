@@ -1,14 +1,21 @@
+"""
+Persistent filesystem-backed archive for Tor directory protocol
+descriptors.
+"""
+
+import asyncio
 import datetime
+import functools
 import hashlib
+import io
+import logging
 import os
 import os.path
-import logging
-from io import BytesIO
 
 import aiofiles
 
 import stem.util.str_tools
-from stem.descriptor import parse_file
+from stem.descriptor import parse_file as stem_parse_file
 from stem.descriptor import DocumentHandler
 from stem.descriptor.server_descriptor import RelayDescriptor
 from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
@@ -27,13 +34,48 @@ MARKERS = {
     EXTRA_INFO_DESCRIPTOR: EXTRA_INFO_DESCRIPTOR_MARKER,
 }
 
+async def parse_bytes(descriptor_bytes, **kwargs):
+    return await parse_file(io.BytesIO(descriptor_bytes), **kwargs)
+
+async def parse_file(*args, **kwargs):
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None,
+                                      functools.partial(stem_parse_file,
+                                                        *args, **kwargs))
+
+def _type_annotation_for(descriptor):
+    # This functionality is now implemented in stem, just keeping it around
+    # here until it lands in a release.
+    # https://trac.torproject.org/projects/tor/ticket/28397
+    annotations = {
+        RelayDescriptor: b"server-descriptor 1.0",
+        RelayExtraInfoDescriptor: b"extra-info 1.0",
+    }
+    # stem uses the same class for both consensus and votes so we need
+    # to have special logic for that
+    if isinstance(descriptor, NetworkStatusDocumentV3):
+        if descriptor.is_consensus:
+            return b"network-status-consensus-3 1.0"
+        if descriptor.is_vote:
+            return b"network-status-vote-3 1.0"
+        raise RuntimeError(
+            "It's a network status but not a consensus or vote?")
+    return annotations.get(type(descriptor), None)
+
+def prepare_annotated_content(descriptor):
+    content = descriptor.get_bytes()
+    type_annotation = _type_annotation_for(descriptor)
+    if type_annotation is not None:
+        return b"@type " + type_annotation + b"\r\n" + content
+    return content
+
 
 class DirectoryArchive:
     """
     Persistent filesystem-backed archive for Tor directory protocol
-    descriptors. This is intended to scale to decades worth of descriptors.
+    descriptors.
 
-    This class implements a superset of the CollecTor filesystem protocol as
+    This implements a superset of the CollecTor filesystem protocol as
     detailed in [collector-protocol]_. The additional functionality is used
     to allow quick retrieval of descriptors by their digest by creating a
     parallel directory hierachy containing symlinks. The assumption is that
@@ -49,9 +91,12 @@ class DirectoryArchive:
                                 faster descriptor retrieval.
     """
 
-    def __init__(self, archive_path, legacy_archive=False):
+    def __init__(self, archive_path, legacy_archive=False,
+                 max_file_concurrency=50):
         self.archive_path = archive_path
         self.legacy_archive = legacy_archive
+        self.max_file_concurrency_lock = asyncio.BoundedSemaphore(
+            max_file_concurrency)
 
     def digest_path_for(self, descriptor, algo="sha1", create_dir=False):
         if self.legacy_archive:
@@ -121,6 +166,8 @@ class DirectoryArchive:
             dpath, fpath = self._consensus_path(descriptor.valid_after)
         elif isinstance(descriptor, NetworkStatusDocumentV3) and \
               descriptor.is_vote:
+            # TODO: The digest functionality should be appearing in stem.
+            # https://trac.torproject.org/projects/tor/ticket/28398
             raw_content, ending = str(descriptor), "\ndirectory-signature\n"
             raw_content = stem.util.str_tools._to_bytes(
                 raw_content[:raw_content.find(ending) + len(ending)])
@@ -169,42 +216,17 @@ class DirectoryArchive:
                     f"{fingerprint}-{digest}"))
         return dpath, fpath
 
-    def _type_annotation_for(self, descriptor):
-        annotations = {
-            RelayDescriptor: b"server-descriptor 1.0",
-            RelayExtraInfoDescriptor: b"extra-info 1.0",
-        }
-
-        # stem uses the same class for both consensus and votes so we need
-        # to have special logic for that
-        if isinstance(descriptor, NetworkStatusDocumentV3):
-            if descriptor.is_consensus:
-                return b"network-status-consensus-3 1.0"
-            elif descriptor.is_vote:
-                return b"network-status-vote-3 1.0"
-            else:
-                raise RuntimeError(
-                    "It's a network status but not a consensus or vote?")
-
-        return annotations.get(type(descriptor), None)
-
-    def prepare_annotated_content(self, descriptor):
-        content = descriptor.get_bytes()
-        type_annotation = self._type_annotation_for(descriptor)
-        if type_annotation is not None:
-            return b"@type " + type_annotation + b"\r\n" + content
-        return content
-
     async def store(self, descriptor):
         path = self.path_for(descriptor, create_dir=True)
-        async with aiofiles.open(path, 'wb') as output:
-            await output.write(self.prepare_annotated_content(descriptor))
-        if not isinstance(descriptor, NetworkStatusDocumentV3):
-            # TODO: Create symlinks for descriptors too
-            digest_path = self.digest_path_for(
-                descriptor, "sha1", create_dir=True)
-            # TODO: Make the symlink async
-            os.symlink(os.path.abspath(path), digest_path)
+        async with self.max_file_concurrency_lock:
+            async with aiofiles.open(path, 'wb') as output:
+                await output.write(prepare_annotated_content(descriptor))
+            if not isinstance(descriptor, NetworkStatusDocumentV3):
+                # TODO: Create symlinks for descriptors too
+                digest_path = self.digest_path_for(
+                    descriptor, "sha1", create_dir=True)
+                # TODO: Make the symlink async
+                os.symlink(os.path.abspath(path), digest_path)
 
     async def consensus(self, valid_after=None):
         """
@@ -220,14 +242,13 @@ class DirectoryArchive:
             valid_after = valid_after.replace(minute=0, second=0)
         _, path = self._consensus_path(valid_after)
         try:
-            async with aiofiles.open(path, 'rb') as source:
-                raw_content = await source.read()
-                # TODO: We use BytesIO here because it's not clear to me how
-                # to parse a string to get a descriptor instead of a file.
-                desc = BytesIO(raw_content)
-                return next(
-                    parse_file(
-                        desc, document_handler=DocumentHandler.DOCUMENT))  # pylint: disable=no-member
+            async with self.max_file_concurrency_lock:
+                async with aiofiles.open(path, 'rb') as source:
+                    raw_content = await source.read()
+                    return next(
+                        await parse_bytes(
+                            raw_content,
+                            document_handler=DocumentHandler.DOCUMENT)) # pylint: disable=no-member
         except FileNotFoundError:
             LOG.debug("The file was not present in the store.")
             return None
@@ -235,18 +256,16 @@ class DirectoryArchive:
     async def descriptor(self, doctype, digest=None, published_hint=None):
         if self.legacy_archive:
             # TODO: Check earlier days too
-            _, path = self._descriptor_path(MARKERS[doctype], digest,
-                                            published_hint)
+            _, path = self._descriptor_path(MARKERS[doctype], published_hint,
+                                            digest)
         else:
             _, path = self._descriptor_digest_path(MARKERS[doctype], "sha1",
                                                    digest)
         try:
-            async with aiofiles.open(path, 'rb') as source:
-                raw_content = await source.read()
-                # TODO: We use BytesIO here because it's not clear to me how
-                # to parse a string to get a descriptor instead of a file.
-                desc = BytesIO(raw_content)
-                return next(parse_file(desc))
+            async with self.max_file_concurrency_lock:
+                async with aiofiles.open(path, 'rb') as source:
+                    raw_content = await source.read()
+                    return next(await parse_bytes(raw_content))
         except FileNotFoundError:
             LOG.debug("The file was not present in the store.")
             return None
