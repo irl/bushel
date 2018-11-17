@@ -20,25 +20,33 @@ def main():
     parser = argparse.ArgumentParser(
         description='A bushel of onions is 57 lbs',
         formatter_class=SubcommandHelpFormatter)
+    parser.add_argument("--verbose", action="store_true", help="Enhanced logging")
     subparsers = parser.add_subparsers(help="Subcommands")
 
     parser_scrape = subparsers.add_parser(
         "scrape",
         help="Recursively download all documents referenced by the latest consensus"
     )
+    parser_scrape.add_argument("--no-votes", help="Do not download votes first, they will still be discovered from the consensus however", action="store_true")
+    parser_scrape.add_argument("--archive-path", help="Alternative path to the archive", default=".")
     parser_scrape.set_defaults(coro=scrape)
 
     parser_scrub = subparsers.add_parser(
         "scrub", help="Check for missing documents in the filesystem storage")
     parser_scrub.add_argument(
         "path", help="Path to consensus(es) to use as starting points")
-    parser_scrub.set_defaults(func=scrub)
+    parser_scrub.add_argument("--legacy-archive", help="Strict CollecTor File Structure Protocol mode", default=False, action="store_true")
+    parser_scrub.add_argument("--ignore-extra-info", help="Ignore references to extra-info descriptors", default=False, action="store_true")
+    parser_scrub.set_defaults(coro=scrub)
 
     args = parser.parse_args()
+    logging.getLogger("bushel").setLevel(
+        logging.DEBUG if args.verbose else logging.INFO
+    )
     if vars(args).get("func"):
-        args.func(args.path)
+        args.func(args)
     elif vars(args).get("coro"):
-        asyncio.run(args.coro())
+        asyncio.run(args.coro(args))
     else:
         parser.print_help()
 
