@@ -176,7 +176,7 @@ class DirectoryArchive:
               descriptor.is_vote:
             # TODO: The digest functionality should be appearing in stem.
             # https://trac.torproject.org/projects/tor/ticket/28398
-            raw_content, ending = str(descriptor), "\ndirectory-signature\n"
+            raw_content, ending = str(descriptor), "\ndirectory-signature "
             raw_content = stem.util.str_tools._to_bytes(
                 raw_content[:raw_content.find(ending) + len(ending)])
             digest = hashlib.sha1(raw_content).hexdigest().upper()
