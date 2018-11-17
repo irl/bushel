@@ -196,7 +196,8 @@ class DirectoryArchive:
     def _consensus_path(self, valid_after):
         dpath = os.path.join(
             self.archive_path, "relay-descriptors", "consensus",
-            f"consensuses-{valid_after.year}-{valid_after.month:02d}",
+            f"{valid_after.year}",
+            f"{valid_after.month:02d}",
             f"{valid_after.day}")
         fpath = os.path.join(
             dpath,
