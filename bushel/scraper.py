@@ -107,7 +107,8 @@ class DirectoryScraper:
         print("All done")
 
 
-async def scrape():
-    directory = DirectoryScraper(".")
-    await directory.fetch_votes()
+async def scrape(args):
+    directory = DirectoryScraper(args.archive_path)
+    if not args.no_votes:
+        await directory.fetch_votes()
     await directory.fetch_consensus()
