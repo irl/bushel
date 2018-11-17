@@ -32,7 +32,7 @@ class DirectoryScraper:
                 return
             self.consensus = consensus
             await self.archive.store(consensus)
-            await self._recurse_network_status_references(consensus)
+        await self._recurse_network_status_references(self.consensus)
 
     async def fetch_votes(self, next_vote=False):
         for authority in DIRECTORY_AUTHORITIES:
