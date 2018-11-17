@@ -246,10 +246,10 @@ class DirectoryArchive:
             async with self.max_file_concurrency_lock:
                 async with aiofiles.open(path, 'rb') as source:
                     raw_content = await source.read()
-                    return next(
-                        await parse_bytes(
-                            raw_content,
-                            document_handler=DocumentHandler.DOCUMENT)) # pylint: disable=no-member
+                return next(
+                    await parse_bytes(
+                        raw_content,
+                        document_handler=DocumentHandler.DOCUMENT)) # pylint: disable=no-member
         except FileNotFoundError:
             LOG.debug("The file was not present in the store.")
             return None
