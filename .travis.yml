@@ -9,4 +9,4 @@ script:
  - python -m nose --with-doctest bushel
  - travis-sphinx build --source=docs/
 after_success:
- - "[ \"$TRAVIS_PYTHON_VERSION\" = \"3.7-dev\" ] && travis-sphinx deploy"
+ - "[ \"$TRAVIS_PULL_REQUEST\" = \"false\" ] && [ \"$TRAVIS_PYTHON_VERSION\" = \"3.7-dev\" ] && travis-sphinx deploy"
