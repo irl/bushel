@@ -17,23 +17,22 @@ LOG = logging.getLogger('')
 
 class DirectoryScraper:
     def __init__(self, archive_path):
-        self.consensus = None
+        self.server_descriptors = {}
+        self.extra_info_descriptors = {}
         self.archive = DirectoryArchive(archive_path)
         self.downloader = DirectoryDownloader()
 
     async def fetch_consensus(self):
-        if self.consensus is None:
-            self.consensus = await self.archive.consensus()
+        consensus = await self.archive.consensus()
         # TODO: Use the check built in to stem once it exists
         # https://trac.torproject.org/projects/tor/ticket/28448
-        if not self.consensus or \
-                datetime.datetime.utcnow() > self.consensus.valid_until:
+        if not consensus or \
+                datetime.datetime.utcnow() > consensus.valid_until:
             consensus = await self.downloader.consensus()
             if consensus is None:
                 return
-            self.consensus = consensus
             await self.archive.store(consensus)
-        await self._recurse_network_status_references(self.consensus)
+        await self._recurse_network_status_references(consensus)
 
     async def fetch_votes(self, next_vote=False):
         authorities = DIRECTORY_AUTHORITIES.copy()
@@ -71,12 +70,16 @@ class DirectoryScraper:
         # Download server descriptors
         server_descriptors = []
         for desc in network_status.routers.values():
-            server_descriptor = await self.archive.descriptor(
-                SERVER_DESCRIPTOR,
-                digest=desc.digest)
+            server_descriptor = self.server_descriptors.get(
+                desc.digest, None)
+            if server_descriptor is None:
+                server_descriptor = await self.archive.descriptor(
+                    SERVER_DESCRIPTOR,
+                    digest=desc.digest)
             if server_descriptor is None:
                 wanted_digests.append(desc.digest)
             else:
+                self.server_descriptors[desc.digest] = server_descriptor
                 server_descriptors.append(server_descriptor)
         while wanted_digests:
             next_batch = [
@@ -92,13 +95,19 @@ class DirectoryScraper:
         for result in await asyncio.gather(*download_tasks):
             for desc in result:
                 await self.archive.store(desc)
+                self.server_descriptors[desc.digest()] = desc
                 server_descriptors.append(desc)
         for desc in server_descriptors:
             if desc.extra_info_digest:
-                extra_info_descriptor = await self.archive.descriptor(
-                    EXTRA_INFO_DESCRIPTOR, desc.extra_info_digest)
-                if extra_info_descriptor is None:
+                extra_info_descriptor = self.extra_info_descriptors.get(desc.extra_info_digest, None)
+                if not extra_info_descriptor:
+                    extra_info_descriptor = await self.archive.descriptor(
+                        EXTRA_INFO_DESCRIPTOR, desc.extra_info_digest)
+                if not extra_info_descriptor:
                     wanted_digests.append(desc.extra_info_digest)
+                else:
+                    self.extra_info_descriptors[extra_info_descriptor.digest()] = \
+                        extra_info_descriptor
         download_tasks.clear()
 
         # Download extra info descriptors
@@ -115,6 +124,7 @@ class DirectoryScraper:
         await self.downloader.perform_downloads()
         for result in await asyncio.gather(*download_tasks):
             for desc in result:
+                self.extra_info_descriptors[desc.digest()] = desc
                 await self.archive.store(desc)
 
         print("All done")

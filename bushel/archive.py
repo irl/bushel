@@ -100,7 +100,7 @@ class DirectoryArchive:
     """
 
     def __init__(self, archive_path, legacy_archive=False,
-                 max_file_concurrency=50):
+                 max_file_concurrency=200):
         self.archive_path = archive_path
         self.legacy_archive = legacy_archive
         self.max_file_concurrency_lock = asyncio.BoundedSemaphore(
