@@ -174,11 +174,12 @@ class DirectoryDownloader:
             if consensus:
                 return consensus
 
-    async def vote(self, endpoint=None, digest=None, next_vote=False, supress=True):
-        if digest:
-            url = f"/tor/status-vote/current/d/{digest}"
+    async def vote(self, valid_after=None, v3ident=None, digest="*", endpoint=None):
+        if digest == "*":
+            url = f"/tor/status-vote/current/authority"
+            #url = f"/tor/status-vote/{'next' if next_vote else 'current'}/authority"
         else:
-            url = f"/tor/status-vote/{'next' if next_vote else 'current'}/authority"
+            url = f"/tor/status-vote/current/d/{digest}"
         query = self.downloader.query(url,
             document_handler=stem.descriptor.DocumentHandler.DOCUMENT, # pylint: disable=no-member
             endpoints=[endpoint] if endpoint else self.directory_authorities())
@@ -186,14 +187,8 @@ class DirectoryDownloader:
         while not query.is_done:
             await asyncio.sleep(1)
         LOG.debug("Vote download completed successfully")
-        try:
-            if not supress:
-                query.run()  # This will throw any exceptions, the
-                # query is already done so this doesn't block.
-            for vote in query:
-                return vote
-        except (urllib.error.URLError, socket.timeout, ValueError):
-            LOG.error("Failed to download a vote!")
+        for vote in query:
+            return vote
 
     async def descriptor(self, doctype, digest=None, endpoint=None):
         loop = asyncio.get_running_loop()
@@ -204,6 +199,7 @@ class DirectoryDownloader:
             random.shuffle(endpoints)
         else:
             endpoints = [endpoint]
+        attempts = 20
         for attempt_endpoint in endpoints:
             query = self.downloader.query(
                 url_for(doctype, digest=digest), endpoints=[attempt_endpoint])
@@ -211,5 +207,8 @@ class DirectoryDownloader:
                 None, functools.partial(query.run, suppress=True))
             if result:
                 return result[0]
+            attempts -= 1
+            if not attempts:
+                break
         if endpoint:
             return await self.descriptor(doctype, digest=digest)

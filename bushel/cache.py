@@ -33,25 +33,17 @@ class DirectoryCache:
                                      consensus. If *None* then the latest
                                      consensus will be retrieved.
         """
-        if valid_after is None:
-            valid_after = datetime.datetime.utcnow()
-            valid_after = valid_after.replace(minute=0, second=0)
         consensus = await self.archive.consensus(valid_after)
-        if consensus:
-            now = datetime.datetime.utcnow().replace(minute=0, second=0)
-            estimated_fresh_until = valid_after + datetime.timedelta(hours=1)
-            if valid_after and \
-                  now >= valid_after and now < estimated_fresh_until:
-                return consensus
-        consensus = await self.downloader.consensus()
-        if consensus:
-            await self.archive.store(consensus)
+        if not consensus:
+            consensus = await self.downloader.consensus()
+            if consensus:
+                await self.archive.store(consensus)
         return consensus
 
-    async def vote(self, v3ident=None, digest=None, next_vote=False):
-        vote = await self.archive.vote(v3ident=v3ident)
+    async def vote(self, v3ident, digest="*", valid_after=None):
+        vote = await self.archive.vote(v3ident, digest="*", valid_after=valid_after)
         if vote is None:
-            vote = await self.downloader.vote()
+            vote = await self.downloader.vote(digest=digest)
             if vote is None:
                 return
             await self.archive.store(vote)
@@ -62,15 +54,17 @@ class DirectoryCache:
             if digest in self.descriptors[doctype]:
                 return self.descriptors[doctype][digest]
 
-    async def descriptor(self, doctype, digest=None, endpoint=None):
+    async def descriptor(self, doctype, digest=None, published_hint=None, endpoint=None):
         if isinstance(digest, str):
             descriptor = self._cached_descriptor(doctype, digest)
             if descriptor:
                 return descriptor
-            descriptor = await self.archive.descriptor(
-                doctype,
-                digest=digest
-              )
+            if doctype is SERVER_DESCRIPTOR:
+                descriptor = await self.archive.relay_server_descriptor(
+                    digest, published_hint=published_hint)
+            else:
+                descriptor = await self.archive.relay_extra_info_descriptor(
+                    digest, published_hint=published_hint)
             if not descriptor:
                 descriptor = await self.downloader.descriptor(
                     doctype, digest=digest, endpoint=endpoint)
@@ -83,6 +77,6 @@ class DirectoryCache:
             return descriptor
         else:
             results = await asyncio.gather(*[self.descriptor(
-                                                 doctype, d, endpoint)
+                                                 doctype, d, published_hint, endpoint)
                                              for d in digest])
             return [r for r in results if r]

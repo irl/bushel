@@ -9,8 +9,6 @@ from stem.descriptor import parse_file
 
 from bushel import SERVER_DESCRIPTOR
 from bushel import EXTRA_INFO_DESCRIPTOR
-from bushel.archive import EXTRA_INFO_DESCRIPTOR_MARKER
-from bushel.archive import SERVER_DESCRIPTOR_MARKER
 from bushel.archive import DirectoryArchive
 
 LOG = logging.getLogger("scrub")
@@ -79,8 +77,7 @@ class DirectoryArchiveScrubber:
             if status.dir_port is not None:
                 stats["directory_cache_dir_port"] += 1
         digest = status.digest.lower()
-        server = await self.archive.descriptor(
-            SERVER_DESCRIPTOR,
+        server = await self.archive.relay_server_descriptor(
             digest,
             published_hint=valid_after)
         if server:
@@ -96,8 +93,7 @@ class DirectoryArchiveScrubber:
             if not ignore_extra_info and server.extra_info_digest:
                 stats["extra_info_referenced"] += 1
                 digest = server.extra_info_digest.lower()
-                extra_info = await self.archive.descriptor(
-                    EXTRA_INFO_DESCRIPTOR,
+                extra_info = await self.archive.relay_extra_info_descriptor(
                     digest,
                     published_hint=valid_after)
                 if extra_info:

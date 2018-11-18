@@ -45,15 +45,13 @@ class DirectoryScraper:
             votes += await asyncio.gather(*[
                 self.cache.vote(
                     authority.v3ident,
-                    digest=authority.vote_digest,
-                    valid_after=status.valid_after)
+                    digest=authority.vote_digest)
                 for authority in status.directory_authorities
             ])
         return [v for v in votes if v]
 
     async def _discover_votes_directly(self, next_vote):
-        votes = await asyncio.gather(*[self.cache.vote(v3ident=authority.v3ident,
-                                                       next_vote=next_vote)
+        votes = await asyncio.gather(*[self.cache.vote(v3ident=authority.v3ident)
                                        for authority in DIRECTORY_AUTHORITIES])
         return [v for v in votes if v]
 
@@ -71,7 +69,7 @@ class DirectoryScraper:
                   containing all discovered votes.
         """
         if status:
-            return await self._discover_votes_from_statuses(statuses)
+            return await self._discover_votes_from_status(status)
         else:
             return await self._discover_votes_directly(next_vote)
 
@@ -104,12 +102,14 @@ class DirectoryScraper:
             return [s for s in chain(*await asyncio.gather(*[self.cache.descriptor(
                 SERVER_DESCRIPTOR,
                 digest=endpoint_assignments[assignment],
+                published_hint=status.valid_after,
                 endpoint=assignment)
                 for assignment in endpoint_assignments])) if s]
         else:
             return await self.cache.descriptor(
                 SERVER_DESCRIPTOR,
-                digest=referencing_endpoints.keys())
+                digest=referencing_endpoints.keys(),
+                published_hint=status.valid_after)
 
     async def discover_extra_info_descriptors(self, server_descriptors):
         return await asyncio.gather(*[self.cache.descriptor(
@@ -124,7 +124,9 @@ class DirectoryScraper:
             self.cache.set_mode(DirectoryCacheMode.CLIENT)
         # TODO: Check for unrecognised modes
         statuses = await self.discover_votes()
-        statuses.append(await self.discover_consensus())
+        consensus = await self.discover_consensus()
+        statuses.append(consensus)
+        statuses += await self.discover_votes(consensus)
         server_descriptors = await self.discover_server_descriptors(
             statuses,
             endpoint_preference=directory_cache_mode is
@@ -140,4 +142,5 @@ class DirectoryScraper:
 
 async def scrape(args):
     scraper = DirectoryScraper(args.archive_path)
-    await scraper.scrape_as_directory_cache()
+    await scraper.cache.downloader.consensus()
+    await scraper.scrape_as_client()
