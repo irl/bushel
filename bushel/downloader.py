@@ -163,23 +163,24 @@ class DirectoryDownloader:
         """
         raise NotImplementedError()
 
-    async def consensus(self, endpoint=None, supress=True):
+    async def _consensus_attempt(self, endpoint):
         query = self.downloader.get_consensus(
-            document_handler=stem.descriptor.DocumentHandler.DOCUMENT, # pylint: disable=no-member
+            document_handler=stem.descriptor.DocumentHandler.DOCUMENT,  # pylint: disable=no-member
             endpoints=[endpoint] if endpoint else self.directory_authorities())
-        LOG.debug("Started consensus download")
-        while not query.is_done:
-            await asyncio.sleep(1)
-        LOG.debug("Consensus download completed successfully")
-        try:
-            if not supress:
-                query.run()  # This will throw any exceptions, the
-                # query is already done so this doesn't block.
-            for consensus in query:
-                self.current_consensus = consensus
+        loop = asyncio.get_running_loop()
+        result = await loop.run_in_executor(
+            None, functools.partial(query.run, suppress=True))
+        for consensus in result:
+            self.current_consensus = consensus
+            return consensus
+
+    async def consensus(self, endpoint=None):
+        endpoints = [endpoint] if endpoint else self.endpoints.copy()
+        random.shuffle(endpoints)
+        for endpoint in endpoints:
+            consensus = await self._consensus_attempt(endpoint)
+            if consensus:
                 return consensus
-        except (urllib.error.URLError, socket.timeout, ValueError):
-            LOG.error("Failed to download a consensus!")
 
     async def vote(self, endpoint=None, digest=None, next_vote=False, supress=True):
         if digest:

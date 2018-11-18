@@ -28,7 +28,7 @@ class DirectoryScraper:
         self.archive = self.cache.archive
         self.downloader = self.cache.downloader
 
-    async def discover_consensus(self, next_consensus=True):
+    async def discover_consensus(self, next_consensus=True, endpoint=None):
         """
         Fetches either the current or next consensus.
 
@@ -39,17 +39,8 @@ class DirectoryScraper:
                   :py:class:`~stem.descriptor.network_status.NetworkStatusDocumentV3`
                   for the requested consensus.
         """
-        consensus = await self.archive.consensus()
-        # TODO: Use the check built in to stem once it exists
-        # https://trac.torproject.org/projects/tor/ticket/28448
-        if not consensus or \
-                datetime.datetime.utcnow() > consensus.valid_until:
-            consensus = await self.downloader.consensus()
-            if consensus is None:
-                return
-            await self.archive.store(consensus)
-        return consensus
-        print(self.downloader.endpoints)
+        # TODO: Add support for next and endpoint
+        return await self.cache.consensus()
 
     async def discover_votes(self, next_vote=False):
         """

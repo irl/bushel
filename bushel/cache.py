@@ -41,13 +41,14 @@ class DirectoryCache:
                                      consensus will be retrieved.
         """
         consensus = await self.archive.consensus(valid_after)
-        now = datetime.datetime.utcnow().replace(minute=0, second=0)
-        estimated_fresh_until = valid_after + datetime.timedelta(hour=1)
-        if not valid_after or \
-              now >= valid_after and now < estimated_fresh_until:
-            consensus = await self.downloader.consensus()
-            if consensus is None:
-                return
+        if consensus:
+            now = datetime.datetime.utcnow().replace(minute=0, second=0)
+            estimated_fresh_until = valid_after + datetime.timedelta(hours=1)
+            if valid_after and \
+                  now >= valid_after and now < estimated_fresh_until:
+                return consensus
+        consensus = await self.downloader.consensus()
+        if consensus:
             await self.archive.store(consensus)
         return consensus
 
