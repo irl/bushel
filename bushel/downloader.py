@@ -1,4 +1,5 @@
 import asyncio
+import functools
 import logging
 import random
 import socket
@@ -99,20 +100,16 @@ class DirectoryDownloader:
                  max_concurrency=5):
         self.max_concurrency_lock = asyncio.BoundedSemaphore(max_concurrency)
         self.current_consensus = initial_consensus
-        self._set_endpoints(endpoints or [a.dir_port for a in DIRECTORY_AUTHORITIES])
+        self.set_endpoints(endpoints or [a.dir_port for a in DIRECTORY_AUTHORITIES])
         self.downloader = DescriptorDownloader(
             timeout=5,
             retries=0,
         )
-        self.desired = {}
-        self.in_progress = {}
-        self.already = {}
 
-    def _set_endpoints(self, endpoints):
+    def set_endpoints(self, endpoints):
         self.endpoints = endpoints
-        self.endpoint_requests = {x: [] for x in endpoints}
 
-    def authorities(self):
+    def directory_authorities(self):
         """
         Usually returns a list containing either a :py:class:`~stem.DirPort` or
         an :py:class:`~stem.ORPort` for each of the directory authorities.
@@ -146,13 +143,14 @@ class DirectoryDownloader:
         """
         if self.current_consensus is None:
             # TODO: Check also that it's fresh!
-            return self.authorities()
+            LOG.warning("Tried to use directory caches but we don't have a consensus")
+            return self.directory_authorities()
         for authority in DIRECTORY_AUTHORITIES:
-            if authority in self.endpoints:
+            if authority.dir_port in self.endpoints:
                 directory_caches = [a.dir_port for a in DIRECTORY_AUTHORITIES]
-                for router in self.current_consensus.routers.entries():
+                for router in self.current_consensus.routers.values():
                     if stem.Flag.V2DIR in router.flags and ( # pylint: disable=no-member
-                            not extra_info or router.extra_info_cache):
+                            not extra_info or router.extra_info_cache) and router.dir_port:
                         directory_caches.append(
                             DirPort(router.address, router.dir_port))
                 return directory_caches
@@ -168,7 +166,7 @@ class DirectoryDownloader:
     async def consensus(self, endpoint=None, supress=True):
         query = self.downloader.get_consensus(
             document_handler=stem.descriptor.DocumentHandler.DOCUMENT, # pylint: disable=no-member
-            endpoints=[endpoint] if endpoint else self.authorities())
+            endpoints=[endpoint] if endpoint else self.directory_authorities())
         LOG.debug("Started consensus download")
         while not query.is_done:
             await asyncio.sleep(1)
@@ -190,7 +188,7 @@ class DirectoryDownloader:
             url = f"/tor/status-vote/{'next' if next_vote else 'current'}/authority"
         query = self.downloader.query(url,
             document_handler=stem.descriptor.DocumentHandler.DOCUMENT, # pylint: disable=no-member
-            endpoints=[endpoint] if endpoint else self.authorities())
+            endpoints=[endpoint] if endpoint else self.directory_authorities())
         LOG.debug("Started consensus download")
         while not query.is_done:
             await asyncio.sleep(1)
@@ -204,50 +202,14 @@ class DirectoryDownloader:
         except (urllib.error.URLError, socket.timeout, ValueError):
             LOG.error("Failed to download a vote!")
 
-    def _is_desired(self, doctype, digest=None):
-        if doctype in self.desired:
-            if digest in self.desired[doctype]:
-                return True
-        return False
-
-    def _is_in_progress(self, doctype, digest=None):
-        if doctype in self.in_progress:
-            if digest in self.in_progress[doctype]:
-                return True
-        return False
-
-    def _is_already(self, endpoint, doctype, digest=None):
-        if endpoint in self.already:
-            if doctype in self.already[endpoint]:
-                if digest in self.already[endpoint][doctype]:
-                     return True
-        return False
-
-    def descriptor(self, doctype, digest=None, endpoint=None):
-        if isinstance(digest, list):
-            digest = tuple(digest)
+    async def descriptor(self, doctype, digest=None, endpoint=None):
         loop = asyncio.get_running_loop()
-        fut = loop.create_future()
         if endpoint is None:
+            # TODO: Fetch extra info from extra info caches
             endpoint = random.choice(self.endpoints)
-        if self._is_desired(doctype, digest=digest) or \
-                self._is_in_progress(doctype, digest=digest) or \
-                self._is_already(endpoint, doctype, digest=digest):
-            fut.set_result([])
-            return fut
-        if not doctype in self.desired:
-            self.desired[doctype] = {}
-        self.desired[doctype][digest] = (endpoint, fut)
-        return fut
-
-    async def perform_downloads(self):
-        for doctype in self.desired:
-            for digest in self.desired[doctype]:
-                endpoint, fut = self.desired[doctype][digest]
-                query = self.downloader.query(
-                    url_for(doctype, digest=digest),
-                    endpoints=[endpoint])
-                while not query.is_done:
-                    await asyncio.sleep(1)
-                fut.set_result([d for d in query])
-        self.desired = {}
+        query = self.downloader.query(
+            url_for(doctype, digest=digest),
+            endpoints=[endpoint])
+        result = await loop.run_in_executor(None, functools.partial(query.run, suppress=True))
+        if result:
+            return result[0]
