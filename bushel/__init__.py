@@ -40,10 +40,13 @@ DIRECTORY_AUTHORITIES = [
                        DirPort("204.13.164.11", 80)),
 ]
 
+LOCAL_DIRECTORY_CACHE = DirPort("127.0.0.1", 9030)
+
 SERVER_DESCRIPTOR = 10
 EXTRA_INFO_DESCRIPTOR = 20
 
 DirectoryCacheMode = stem.util.enum.UppercaseEnum(
     'CLIENT',
     'DIRECTORY_CACHE',
+    'TESTING',
 )

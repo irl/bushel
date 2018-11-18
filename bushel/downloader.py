@@ -11,6 +11,7 @@ from stem.descriptor.remote import DescriptorDownloader
 
 from bushel import DIRECTORY_AUTHORITIES
 from bushel import EXTRA_INFO_DESCRIPTOR
+from bushel import LOCAL_DIRECTORY_CACHE
 from bushel import SERVER_DESCRIPTOR
 from bushel import DirectoryCacheMode
 
@@ -111,9 +112,12 @@ class DirectoryDownloader:
     def set_mode(self, directory_cache_mode):
         if directory_cache_mode == DirectoryCacheMode.DIRECTORY_CACHE:
             self.endpoints = self.extra_info_endpoints = self.directory_authorities()
-        else:
+        elif directory_cache_mode == DirectoryCacheMode.CLIENT:
             self.endpoints = self.directory_caches()
             self.extra_info_endpoints = self.directory_caches(extra_info=True)
+        elif directory_cache_mode == DirectoryCacheMode.TESTING:
+            self.endpoints = [LOCAL_DIRECTORY_CACHE]
+        # TODO: Error if we don't know what mode it is
 
     def directory_authorities(self):
         """
