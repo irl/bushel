@@ -8,28 +8,21 @@ import stem
 
 from bushel import SERVER_DESCRIPTOR
 from bushel import EXTRA_INFO_DESCRIPTOR
+from bushel import DirectoryCacheMode
 from bushel.archive import DirectoryArchive
 from bushel.downloader import DirectoryDownloader
 
 LOG = logging.getLogger('')
-
-DirectoryCacheMode = stem.util.enum.UppercaseEnum(
-    'CLIENT',
-    'DIRECTORY_CACHE',
-)
 
 class DirectoryCache:
     def __init__(self, archive_path):
         self.descriptors = {}
         self.archive = DirectoryArchive(archive_path)
         self.downloader = DirectoryDownloader()
+        self.downloader.descriptor_cache = self._cached_descriptor # TODO: Do something more sensible
 
     def set_mode(self, directory_cache_mode):
-        if directory_cache_mode is DirectoryCacheMode.CLIENT:
-            self.downloader.set_endpoints(self.downloader.directory_caches())
-        if directory_cache_mode is DirectoryCacheMode.DIRECTORY_CACHE:
-            self.downloader.set_endpoints(self.downloader.directory_authorities())
-        # TODO: Catch unknown modes
+        self.downloader.set_mode(directory_cache_mode)
 
     async def consensus(self, valid_after=None):
         """
@@ -40,6 +33,9 @@ class DirectoryCache:
                                      consensus. If *None* then the latest
                                      consensus will be retrieved.
         """
+        if valid_after is None:
+            valid_after = datetime.datetime.utcnow()
+            valid_after = valid_after.replace(minute=0, second=0)
         consensus = await self.archive.consensus(valid_after)
         if consensus:
             now = datetime.datetime.utcnow().replace(minute=0, second=0)
@@ -52,13 +48,14 @@ class DirectoryCache:
             await self.archive.store(consensus)
         return consensus
 
-#    async def vote(self, endpoint=None, digest=None, valid_after=None):
-#            vote = await self.archive.vote()
-#            if vote is None:
-#                vote = await self.downloader.vote()
-#                if vote is None:
-#                    continue
-#                await self.archive.store(vote)
+    async def vote(self, v3ident=None, digest=None, next_vote=False):
+        vote = await self.archive.vote(v3ident=v3ident)
+        if vote is None:
+            vote = await self.downloader.vote()
+            if vote is None:
+                return
+            await self.archive.store(vote)
+        return vote
 
     def _cached_descriptor(self, doctype, digest):
         if doctype in self.descriptors:

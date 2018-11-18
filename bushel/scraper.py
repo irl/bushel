@@ -11,8 +11,8 @@ import stem
 from bushel import SERVER_DESCRIPTOR
 from bushel import EXTRA_INFO_DESCRIPTOR
 from bushel import DIRECTORY_AUTHORITIES
+from bushel import DirectoryCacheMode
 from bushel.cache import DirectoryCache
-from bushel.cache import DirectoryCacheMode
 
 LOG = logging.getLogger('')
 
@@ -24,9 +24,6 @@ def dir_port_from_v3ident(v3ident):
 class DirectoryScraper:
     def __init__(self, archive_path):
         self.cache = DirectoryCache(archive_path)
-        # TODO: Don't poke at the archive and downloader directly
-        self.archive = self.cache.archive
-        self.downloader = self.cache.downloader
 
     async def discover_consensus(self, next_consensus=True, endpoint=None):
         """
@@ -42,7 +39,25 @@ class DirectoryScraper:
         # TODO: Add support for next and endpoint
         return await self.cache.consensus()
 
-    async def discover_votes(self, next_vote=False):
+    async def _discover_votes_from_status(self, status):
+        votes = []
+        if status.is_consensus:
+            votes += await asyncio.gather(*[
+                self.cache.vote(
+                    authority.v3ident,
+                    digest=authority.vote_digest,
+                    valid_after=status.valid_after)
+                for authority in status.directory_authorities
+            ])
+        return [v for v in votes if v]
+
+    async def _discover_votes_directly(self, next_vote):
+        votes = await asyncio.gather(*[self.cache.vote(v3ident=authority.v3ident,
+                                                       next_vote=next_vote)
+                                       for authority in DIRECTORY_AUTHORITIES])
+        return [v for v in votes if v]
+
+    async def discover_votes(self, status=None, next_vote=False):
         """
         Retrieves either the current or next votes. Votes are discovered by
         fetching each directory's own vote. To discover votes from a consensus
@@ -55,21 +70,10 @@ class DirectoryScraper:
                   :py:class:`~stem.descriptor.network_status.NetworkStatusDocumentV3`
                   containing all discovered votes.
         """
-        authorities = DIRECTORY_AUTHORITIES.copy()
-        random.shuffle(authorities)
-        votes = []
-        for authority in authorities:
-            # TODO: This will return the current vote even if we want the next
-            # vote
-            vote = await self.archive.vote(authority.v3ident)
-            if vote is None:
-                vote = await self.downloader.vote(endpoint=authority.dir_port,
-                                                  next_vote=next_vote)
-                if vote is None:
-                    continue
-                await self.archive.store(vote)
-            votes.append(vote)
-        return votes
+        if status:
+            return await self._discover_votes_from_statuses(statuses)
+        else:
+            return await self._discover_votes_directly(next_vote)
 
     async def discover_server_descriptors(self, statuses, endpoint_preference=True):
         """
@@ -113,20 +117,6 @@ class DirectoryScraper:
             desc.extra_info_digest)
             for desc in server_descriptors])
 
-    #async def _recurse_network_status_references(self, network_status, endpoint=None):
-    #    if network_status.is_consensus:
-    #        authorities = [a for a in network_status.directory_authorities]
-    #        random.shuffle(authorities)
-    #        for authority in authorities:
-    #            vote = await self.archive.vote(authority.v3ident,
-    #                                           digest=authority.vote_digest,
-    #                                           valid_after=network_status.valid_after)
-    #            if not vote:
-    #                vote = await self.downloader.vote(digest=authority.vote_digest)
-    #                if vote:
-    #                    await self.archive.store(vote)
-    #            await self._recurse_network_status_references(vote)
-
     async def _scrape(self, directory_cache_mode):
         if directory_cache_mode is DirectoryCacheMode.DIRECTORY_CACHE:
             self.cache.set_mode(DirectoryCacheMode.DIRECTORY_CACHE)
@@ -150,5 +140,4 @@ class DirectoryScraper:
 
 async def scrape(args):
     scraper = DirectoryScraper(args.archive_path)
-    await scraper.cache.downloader.consensus()
-    await scraper.scrape_as_client()
+    await scraper.scrape_as_directory_cache()

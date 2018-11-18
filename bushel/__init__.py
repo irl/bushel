@@ -1,6 +1,7 @@
 
 from collections import namedtuple
 
+import stem.util
 from stem import DirPort
 from stem import ORPort
 
@@ -41,3 +42,8 @@ DIRECTORY_AUTHORITIES = [
 
 SERVER_DESCRIPTOR = 10
 EXTRA_INFO_DESCRIPTOR = 20
+
+DirectoryCacheMode = stem.util.enum.UppercaseEnum(
+    'CLIENT',
+    'DIRECTORY_CACHE',
+)

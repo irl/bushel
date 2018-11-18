@@ -12,6 +12,7 @@ from stem.descriptor.remote import DescriptorDownloader
 from bushel import DIRECTORY_AUTHORITIES
 from bushel import EXTRA_INFO_DESCRIPTOR
 from bushel import SERVER_DESCRIPTOR
+from bushel import DirectoryCacheMode
 
 LOG = logging.getLogger('')
 
@@ -96,46 +97,37 @@ class DirectoryDownloader:
 
     def __init__(self,
                  initial_consensus=None,
-                 endpoints=None,
-                 max_concurrency=5):
+                 directory_cache_mode=None,
+                 max_concurrency=9):
         self.max_concurrency_lock = asyncio.BoundedSemaphore(max_concurrency)
         self.current_consensus = initial_consensus
-        self.set_endpoints(endpoints or [a.dir_port for a in DIRECTORY_AUTHORITIES])
+        self.set_mode(directory_cache_mode or DirectoryCacheMode.DIRECTORY_CACHE)
         self.downloader = DescriptorDownloader(
             timeout=5,
             retries=0,
         )
+        self.descriptor_cache = None
 
-    def set_endpoints(self, endpoints):
-        self.endpoints = endpoints
+    def set_mode(self, directory_cache_mode):
+        if directory_cache_mode == DirectoryCacheMode.DIRECTORY_CACHE:
+            self.endpoints = self.extra_info_endpoints = self.directory_authorities()
+        else:
+            self.endpoints = self.directory_caches()
+            self.extra_info_endpoints = self.directory_caches(extra_info=True)
 
     def directory_authorities(self):
         """
-        Usually returns a list containing either a :py:class:`~stem.DirPort` or
+        Returns a list containing either a :py:class:`~stem.DirPort` or
         an :py:class:`~stem.ORPort` for each of the directory authorities.
-
-        If endpoints have been manually set and the list of endpoints does not
-        contain a known directory authority, then the list of endpoints is
-        returned instead. This is to allow for testing with a local directory
-        cache, or in testing networks.
         """
-        for authority in DIRECTORY_AUTHORITIES:
-            if authority.dir_port in self.endpoints or \
-                  authority.or_port in self.endpoints:
-                return [a.dir_port for a in DIRECTORY_AUTHORITIES.copy()]
-        return self.endpoints
+        return [a.dir_port for a in DIRECTORY_AUTHORITIES]
 
     def directory_caches(self, extra_info=False):
         """
-        Usually returns a list containing either a DirPort or an ORPort for
+        Returns a list containing either a DirPort or an ORPort for
         each of the directory caches known from the latest consensus. If no
         consensus is known, this will return
         :py:meth:`~DirectoryDownloader.authorities()` instead.
-
-        If endpoints have been manually set and the list of endpoints does not
-        contain a known directory authority, then the list of endpoints is
-        returned instead. This is to allow for testing with a local directory
-        cache, or in testing networks.
 
         :param bool extra_info: Whether the list returned should contain only
                                 directory caches that cache extra-info
@@ -145,16 +137,16 @@ class DirectoryDownloader:
             # TODO: Check also that it's fresh!
             LOG.warning("Tried to use directory caches but we don't have a consensus")
             return self.directory_authorities()
-        for authority in DIRECTORY_AUTHORITIES:
-            if authority.dir_port in self.endpoints:
-                directory_caches = [a.dir_port for a in DIRECTORY_AUTHORITIES]
-                for router in self.current_consensus.routers.values():
-                    if stem.Flag.V2DIR in router.flags and ( # pylint: disable=no-member
-                            not extra_info or router.extra_info_cache) and router.dir_port:
-                        directory_caches.append(
-                            DirPort(router.address, router.dir_port))
-                return directory_caches
-        return [a.dir_port for a in DIRECTORY_AUTHORITIES]
+        directory_caches = [a.dir_port for a in DIRECTORY_AUTHORITIES]
+        for router in self.current_consensus.routers.values():
+            if extra_info and self.descriptor_cache:
+                server_descriptor = self.descriptor_cache(SERVER_DESCRIPTOR, router.digest)
+                if (not server_descriptor) or (not server_descriptor.extra_info_cache):
+                    continue
+            if stem.Flag.V2DIR in router.flags and router.dir_port: # pylint: disable=no-member
+                directory_caches.append(
+                    DirPort(router.address, router.dir_port))
+        return directory_caches
 
     def _consensus_is_fresh(self):
         """
@@ -175,7 +167,7 @@ class DirectoryDownloader:
             return consensus
 
     async def consensus(self, endpoint=None):
-        endpoints = [endpoint] if endpoint else self.endpoints.copy()
+        endpoints = [endpoint] if endpoint else self.endpoints
         random.shuffle(endpoints)
         for endpoint in endpoints:
             consensus = await self._consensus_attempt(endpoint)
@@ -206,11 +198,18 @@ class DirectoryDownloader:
     async def descriptor(self, doctype, digest=None, endpoint=None):
         loop = asyncio.get_running_loop()
         if endpoint is None:
-            # TODO: Fetch extra info from extra info caches
-            endpoint = random.choice(self.endpoints)
-        query = self.downloader.query(
-            url_for(doctype, digest=digest),
-            endpoints=[endpoint])
-        result = await loop.run_in_executor(None, functools.partial(query.run, suppress=True))
-        if result:
-            return result[0]
+            endpoints = self.endpoints if doctype != EXTRA_INFO_DESCRIPTOR \
+                else self.extra_info_endpoints
+            endpoints = endpoints.copy()
+            random.shuffle(endpoints)
+        else:
+            endpoints = [endpoint]
+        for attempt_endpoint in endpoints:
+            query = self.downloader.query(
+                url_for(doctype, digest=digest), endpoints=[attempt_endpoint])
+            result = await loop.run_in_executor(
+                None, functools.partial(query.run, suppress=True))
+            if result:
+                return result[0]
+        if endpoint:
+            return await self.descriptor(doctype, digest=digest)

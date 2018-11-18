@@ -273,18 +273,13 @@ class DirectoryArchive:
             LOG.debug("The file was not present in the store.")
             return None
 
-    async def consensus(self, valid_after=None):
+    async def consensus(self, valid_after):
         """
         Retrieves a consensus from the archive.
 
-        :param datetime valid_after: If set, will retrieve a consensus with the
-                                     given valid_after time, otherwise a
-                                     consensus that became valid at the top
-                                     of the current hour will be retrieved.
+        :param datetime valid_after: The valid_after time of the consensus to
+                                     retrieve.
         """
-        if valid_after is None:
-            valid_after = datetime.datetime.utcnow()
-            valid_after = valid_after.replace(minute=0, second=0)
         _, path = self._consensus_path(valid_after)
         try:
             async with self.max_file_concurrency_lock:
