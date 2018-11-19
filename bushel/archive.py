@@ -60,14 +60,15 @@ import stem.util.str_tools
 from stem.descriptor import parse_file as stem_parse_file
 from stem.descriptor import DocumentHandler
 from stem.descriptor.server_descriptor import RelayDescriptor
+from stem.descriptor.server_descriptor import BridgeDescriptor
 from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
+from stem.descriptor.extrainfo_descriptor import BridgeExtraInfoDescriptor
 from stem.descriptor.networkstatus import NetworkStatusDocumentV3
 from stem.util import enum
 
-
 LOG = logging.getLogger('')
 
-CollectorOutSubdirectory = enum.Enum(
+CollectorOutSubdirectory = enum.Enum(  # pylint: disable=invalid-name
     ('BRIDGE_DESCRIPTORS', 'bridge-descriptors'),
     ('EXIT_LISTS', 'exit-lists'),
     ('RELAY_DESCRIPTORS', 'relay-descriptors'),
@@ -75,14 +76,14 @@ CollectorOutSubdirectory = enum.Enum(
     ('WEBSTATS', 'webstats'),
 )
 
-CollectorOutRelayDescsMarker = enum.Enum(
+CollectorOutRelayDescsMarker = enum.Enum(  # pylint: disable=invalid-name
     ('CONSENSUS', 'consensus'),
     ('EXTRA_INFO', 'extra-info'),
     ('SERVER_DESCRIPTOR', 'server-descriptor'),
     ('VOTE', 'vote'),
 )
 
-CollectorOutBridgeDescsMarker = enum.Enum(
+CollectorOutBridgeDescsMarker = enum.Enum(  # pylint: disable=invalid-name
     ('EXTRA_INFO', 'extra-info'),
     ('SERVER_DESCRIPTOR', 'server-descriptor'),
     ('STATUSES', 'statuses'),
@@ -90,6 +91,9 @@ CollectorOutBridgeDescsMarker = enum.Enum(
 
 
 async def parse_file(path, **kwargs):
+    """
+    :py:mod:`asyncio` wrapper for :py:func:`stem.descriptor.parse_file`.
+    """
     loop = asyncio.get_running_loop()
     try:
         async with aiofiles.open(path, 'rb') as source:
@@ -109,7 +113,10 @@ async def parse_file(path, **kwargs):
         pass
 
 
-async def aglob(pathname, recursive=False):
+async def aglob(pathname, *, recursive=False):
+    """
+    :py:mod:`asyncio` wrapper for :py:func:`glob.glob`.
+    """
     loop = asyncio.get_running_loop()
     return await loop.run_in_executor(
         None, functools.partial(glob.glob, pathname, recursive=recursive))
@@ -128,7 +135,7 @@ def collector_422_filename(valid_after, fingerprint):
     :param ~datetime.datetime valid_after: The valid-after time.
     :param str fingerprint: The fingerprint of the bridge authority.
 
-    :returns: The filename as a :py:class:`str`.
+    :returns: Filename as a :py:class:`str`.
     """
     return (f"{valid_after.year}{valid_after.month:02d}"
             f"{valid_after.day:02d}-{valid_after.hour:02d}"
@@ -147,7 +154,7 @@ def collector_431_filename(valid_after):
 
     :param ~datetime.datetime valid_after: The valid-after time.
 
-    :returns: The filename as a :py:class:`str`.
+    :returns: Filename as a :py:class:`str`.
     """
     return (f"{valid_after.year}-{valid_after.month:02d}-"
             f"{valid_after.day:02d}-{valid_after.hour:02d}-"
@@ -160,24 +167,24 @@ def collector_433_filename(valid_after, v3ident, digest):
     [collector-protocol]_.
 
     >>> valid_after = datetime.datetime(2018, 11, 19, 15)
-    >>> v3ident = "D586D18309DED4CD6D57C18FDB97EFA96D330566" # moria1
+    >>> v3ident = "D586D18309DED4CD6D57C18FDB97EFA96D330566"  # moria1
     >>> digest = "663B503182575D242B9D8A67334365FF8ECB53BB"
-    >>> collector_433_filename(valid_after, v3ident, digest)
-    '2018-11-19-15-00-00-vote-D586D18309DED4CD6D57C18FDB97EFA96D330566-663B503182575D242B9D8A67334365FF8ECB53BB'
+    >>> collector_433_filename(valid_after, v3ident, digest)  # doctest: +ELLIPSIS
+    '2018-11-19-15-00-00-vote-D586D18309DED4CD6D57C18FDB97EFA96D330566-663B...3BB'
 
     Paths in the Collector File Structure Protocol using this filename expect
     *upper-case* hex-encoded SHA-1 digests.
 
-    >>> v3ident = "d586d18309ded4cd6d57c18fdb97efa96d330566" # Lower case gets corrected
-    >>> digest = "663b503182575d242b9d8a67334365ff8ecb53bb" # Lower case gets corrected
-    >>> collector_433_filename(valid_after, v3ident, digest)
-    '2018-11-19-15-00-00-vote-D586D18309DED4CD6D57C18FDB97EFA96D330566-663B503182575D242B9D8A67334365FF8ECB53BB'
+    >>> v3ident = "d586d18309ded4cd6d57c18fdb97efa96d330566"  # Lower case gets corrected
+    >>> digest = "663b503182575d242b9d8a67334365ff8ecb53bb"  # Lower case gets corrected
+    >>> collector_433_filename(valid_after, v3ident, digest)  # doctest: +ELLIPSIS
+    '2018-11-19-15-00-00-vote-D586D18309DED4CD6D57C18FDB97EFA96D330566-663B...3BB'
 
     :param ~datetime.datetime valid_after: The valid-after time.
     :param str v3ident: The v3ident of the directory authority.
     :param str digest: The digest of the vote.
 
-    :returns: The filename as a :py:class:`str`.
+    :returns: Filename as a :py:class:`str`.
     """
     v3ident = v3ident.upper()
     digest = digest.upper()
@@ -209,11 +216,12 @@ def collector_521_substructure(published, digest):
     :param str digest: The hex-encoded SHA-1 digest for the descriptor. The
                        case will automatically be fixed to lower-case.
 
-    :returns: The path substructure as a :py:class:`str`.
+    :returns: Path substructure as a :py:class:`str`.
     """
     digest = digest.lower()
     return os.path.join(f"{published.year}", f"{published.month:02d}",
                         f"{digest[0]}", f"{digest[1]}")
+
 
 def collector_521_path(subdirectory, marker, published, digest):
     """
@@ -225,15 +233,15 @@ def collector_521_path(subdirectory, marker, published, digest):
     >>> marker = CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR
     >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
     >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
-    >>> collector_521_path(subdirectory, marker, published, digest)
-    'relay-descriptors/server-descriptor/2018/11/a/9/a94a07b201598d847105ae5fcd5bc3ab10124389'
+    >>> collector_521_path(subdirectory, marker, published, digest)  # doctest: +ELLIPSIS
+    'relay-descriptors/server-descriptor/2018/11/a/9/a94a...389'
 
     Paths in the Collector File Structure Protocol using this substructure
     expect *lower-case* hex-encoded SHA-1 digests.
 
     >>> digest = "A94A07B201598D847105AE5FCD5BC3AB10124389" # Upper case gets corrected
-    >>> collector_521_path(subdirectory, marker, published, digest)
-    'relay-descriptors/server-descriptor/2018/11/a/9/a94a07b201598d847105ae5fcd5bc3ab10124389'
+    >>> collector_521_path(subdirectory, marker, published, digest)  # doctest: +ELLIPSIS
+    'relay-descriptors/server-descriptor/2018/11/a/9/a94a...389'
 
     :param str subdirectory: The subdirectory under the "out" directory to
                              use. Standard values can be found in
@@ -245,12 +253,13 @@ def collector_521_path(subdirectory, marker, published, digest):
     :param str digest: The hex-encoded SHA-1 digest for the descriptor. The
                        case will automatically be fixed to lower-case.
 
-    :returns: The path for the descriptor as a :py:class:`str`.
+    :returns: Path for the descriptor as a :py:class:`str`.
     """
     digest = digest.lower()
     return os.path.join(subdirectory, marker,
                         collector_521_substructure(published, digest),
                         f"{digest}")
+
 
 def collector_522_substructure(valid_after):
     """
@@ -264,24 +273,27 @@ def collector_522_substructure(valid_after):
 
     :param ~datetime.datetime valid_after: The valid-after time.
 
-    :returns: The path substructure as a :py:class:`str`.
+    :returns: Path substructure as a :py:class:`str`.
     """
     return os.path.join(f"{valid_after.year}", f"{valid_after.month:02d}",
                         f"{valid_after.day:02d}")
+
 
 def collector_522_path(subdirectory, marker, valid_after, filename):
     """
     Create a path according to §5.2.2 of the [collector-protocol]_. This is
     used for bridge statuses, and network-status consensuses and votes. For
-    example:
+    a bridge status for example:
 
     >>> subdirectory = CollectorOutSubdirectory.BRIDGE_DESCRIPTORS
     >>> marker = CollectorOutBridgeDescsMarker.STATUSES
     >>> valid_after = datetime.datetime(2018, 11,19, 15)
     >>> fingerprint = "BA44A889E64B93FAA2B114E02C2A279A8555C533" # Serge
     >>> filename = collector_422_filename(valid_after, fingerprint)
-    >>> collector_522_path(subdirectory, marker, valid_after, filename)
-    'bridge-descriptors/statuses/2018/11/19/20181119-150000-BA44A889E64B93FAA2B114E02C2A279A8555C533'
+    >>> collector_522_path(subdirectory, marker, valid_after, filename)  # doctest: +ELLIPSIS
+    'bridge-descriptors/statuses/2018/11/19/20181119-150000-BA44...533'
+
+    Or alternatively for a network-status consensus:
 
     >>> subdirectory = CollectorOutSubdirectory.RELAY_DESCRIPTORS
     >>> marker = CollectorOutRelayDescsMarker.CONSENSUS
@@ -304,7 +316,7 @@ def collector_522_path(subdirectory, marker, valid_after, filename):
                          :py:func:`collector_433_filename` for network-status
                          votes.
 
-    :returns: The path for the descriptor as a :py:class:`str`.
+    :returns: Path for the descriptor as a :py:class:`str`.
     """
     return os.path.join(subdirectory, marker,
                         collector_522_substructure(valid_after), filename)
@@ -331,6 +343,14 @@ def _type_annotation_for(descriptor):
 
 
 def prepare_annotated_content(descriptor):
+    """
+    Encodes annotations and prepends them to the descriptor bytes for writing
+    to disk.
+
+    :param ~stem.descriptor.Descriptor descriptor: The descriptor to prepare.
+
+    :returns: :py:class:`bytes` for the annotated descriptor.
+    """
     content = descriptor.get_bytes()
     type_annotation = _type_annotation_for(descriptor)
     if type_annotation is not None:
@@ -382,52 +402,20 @@ class DirectoryArchive:
             max_file_concurrency)
 
     ####################
-    # Non-standard     #
-    ####################
-
-    #def digest_path_for(self, descriptor, algo="sha1", create_dir=False):
-    #    if self.legacy_archive:
-    #        raise RuntimeError("Cannot get a digest path for descriptors in a "
-    #                           "legacy archive.")
-    #    if algo == "sha1":
-    #        digest = descriptor.digest()
-    #    else:
-    #        raise RuntimeError(
-    #            "Unknown digest algorithm requested for symlink path")
-    #    if isinstance(descriptor, RelayDescriptor):
-    #        dpath, fpath = self._descriptor_digest_path(
-    #            SERVER_DESCRIPTOR_MARKER, algo, digest)
-    #    elif isinstance(descriptor, RelayExtraInfoDescriptor):
-    #        dpath, fpath = self._descriptor_digest_path(
-    #            EXTRA_INFO_DESCRIPTOR_MARKER, algo, digest)
-    #    elif isinstance(descriptor, NetworkStatusDocumentV3) \
-    #          and descriptor.is_consensus:
-    #        dpath, fpath = "/tmp", "/tmp/consensus"
-    #    else:
-    #        print(repr(descriptor))
-    #        raise RuntimeError(
-    #            f"Attempted to store unknown descriptor type {type(descriptor)}"
-    #        )
-    #    if create_dir:
-    #        os.makedirs(dpath, exist_ok=True)
-    #    return fpath
-
-    #def _descriptor_digest_path(self, marker, algo, digest):
-    #    digest = digest.lower()
-    #    dpath = os.path.join(self.archive_path, "relay-descriptors",
-    #                         f"{marker}", f"by-{algo}",
-    #                         *[f"{digest[i]}" for i in range(0, 10)])
-    #    fpath = os.path.join(dpath, f"{digest}")
-    #    return dpath, fpath
-
-    ####################
-    # §5.0             #
+    # out/ Paths       #
     ####################
 
     def path_for(self, descriptor, create_dir=False):
         """
         The filesystem path that a descriptor will be archived at. These paths
         are defined in [collector-protocol]_.
+
+        It is also possible to set *descriptor* with a :py:class:`str` in
+        which case it will be treated as a relative path from the root of the
+        archive. For example:
+
+        >>> DirectoryArchive("/srv/archive").path_for("path/to/descriptor")
+        '/srv/archive/path/to/descriptor'
 
         :param bool create_dir: Create the directory ready to archive a
                                 descriptor.
@@ -436,9 +424,15 @@ class DirectoryArchive:
         """
         if isinstance(descriptor, str):
             fpath = os.path.join(self.archive_path, descriptor)
-        elif isinstance(descriptor, RelayDescriptor):
-            fpath = self.relay_server_descriptor_path(
+        elif isinstance(descriptor, BridgeDescriptor):
+            fpath = self.bridge_server_descriptor_path(descriptor.published,
+                                                       descriptor.digest())
+        elif isinstance(descriptor, BridgeExtraInfoDescriptor):
+            fpath = self.bridge_extra_info_descriptor_path(
                 descriptor.published, descriptor.digest())
+        elif isinstance(descriptor, RelayDescriptor):
+            fpath = self.relay_server_descriptor_path(descriptor.published,
+                                                      descriptor.digest())
         elif isinstance(descriptor, RelayExtraInfoDescriptor):
             fpath = self.relay_extra_info_descriptor_path(
                 descriptor.published, descriptor.digest())
@@ -466,55 +460,189 @@ class DirectoryArchive:
             os.makedirs(dpath, exist_ok=True)
         return fpath
 
-    ####################
-    # §5.2.1           #
-    ####################
-
     def bridge_server_descriptor_path(self, published, digest):
-        return self.path_for(collector_521_path(
-            CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR, published, digest))
+        """
+        Generates a path, including the archive path, for a bridge server
+        descriptor with a given published time and digest. For example:
+
+        >>> archive = DirectoryArchive("/srv/archive")
+        >>> published = datetime.datetime(2018, 11, 19, 15, 1, 2)
+        >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
+        >>> archive.bridge_server_descriptor_path(published, digest)  # doctest: +ELLIPSIS
+        '/srv/archive/bridge-descriptors/server-descriptor/2018/11/a/9/a94a...389'
+
+        These paths are defined in §5.2.1 of [collector-protocol]_.
+
+        :param ~datetime.datetime published: The published time of the
+                                             descriptor.
+        :param str digest: The hex-encoded SHA-1 digest of the descriptor.
+
+        :returns: Archive path as a :py:class:`str`.
+        """
+        return self.path_for(
+            collector_521_path(
+                CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,  # pylint: disable=no-member
+                CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR,  # pylint: disable=no-member
+                published,
+                digest))
 
     def bridge_extra_info_descriptor_path(self, published, digest):
-        return self.path_for(collector_521_path(
-            CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.EXTRA_INFO, published, digest))
+        """
+        Generates a path, including the archive path, for a bridge extra-info
+        descriptor with a given published time and digest. For example:
 
-    ####################
-    # §5.2.2           #
-    ####################
+        >>> archive = DirectoryArchive("/srv/archive")
+        >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
+        >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
+        >>> archive.bridge_extra_info_descriptor_path(published, digest)  # doctest: +ELLIPSIS
+        '/srv/archive/bridge-descriptors/extra-info/2018/11/a/9/a94a...389'
+
+        These paths are defined in §5.2.1 of [collector-protocol]_.
+
+        :param ~datetime.datetime published: The published time of the
+                                             descriptor.
+        :param str digest: The hex-encoded SHA-1 digest of the descriptor.
+
+        :returns: Archive path as a :py:class:`str`.
+        """
+        return self.path_for(
+            collector_521_path(
+                CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,  # pylint: disable=no-member
+                CollectorOutRelayDescsMarker.EXTRA_INFO,  # pylint: disable=no-member
+                published,
+                digest))
 
     def bridge_status_path(self, valid_after, fingerprint):
-        return self.path_for(collector_522_path(
-            CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,
-            CollectorOutBridgeDescsMarker.STATUSES, valid_after,
-            collector_422_filename(valid_after, fingerprint)))
+        """
+        Generates a path, including the archive path, for a bridge status
+        valid-after time and generated by the authority with the given
+        fingerprint. For example:
 
-    ####################
-    # §5.3.2           #
-    ####################
+        >>> archive = DirectoryArchive("/srv/archive")
+        >>> valid_after = datetime.datetime(2018, 11, 19, 15)
+        >>> fingerprint = "BA44A889E64B93FAA2B114E02C2A279A8555C533"  # Serge
+        >>> archive.bridge_status_path(valid_after, fingerprint)  # doctest: +ELLIPSIS
+        '/srv/archive/bridge-descriptors/statuses/2018/11/19/20181119-150000-BA...33'
+
+        These paths are defined in §5.2.2 of [collector-protocol]_.
+
+        :param ~datetime.datetime valid_after: The valid-after time for the
+                                               status.
+        :param str fingerprint: The fingerprint of the bridge authority.
+
+        :returns: Path as a :py:class:`str`.
+        """
+        return self.path_for(
+            collector_522_path(
+                CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,  # pylint: disable=no-member
+                CollectorOutBridgeDescsMarker.STATUSES,  # pylint: disable=no-member
+                valid_after,
+                collector_422_filename(valid_after, fingerprint)))
 
     def relay_server_descriptor_path(self, published, digest):
-        return self.path_for(collector_521_path(
-            CollectorOutSubdirectory.RELAY_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR, published, digest))
+        """
+        Generates a path, including the archive path, for a relay server
+        descriptor with a given published time and digest. For example:
+
+        >>> archive = DirectoryArchive("/srv/archive")
+        >>> published = datetime.datetime(2018, 11, 19, 15, 1, 2)
+        >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
+        >>> archive.relay_server_descriptor_path(published, digest)  # doctest: +ELLIPSIS
+        '/srv/archive/relay-descriptors/server-descriptor/2018/11/a/9/a94a...389'
+
+        These paths are defined in §5.3.2 of [collector-protocol]_.
+
+        :param ~datetime.datetime published: The published time of the
+                                             descriptor.
+        :param str digest: The hex-encoded SHA-1 digest of the descriptor.
+
+        :returns: Path as a :py:class:`str`.
+        """
+        return self.path_for(
+            collector_521_path(
+                CollectorOutSubdirectory.RELAY_DESCRIPTORS,  # pylint: disable=no-member
+                CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR,  # pylint: disable=no-member
+                published,
+                digest))
 
     def relay_extra_info_descriptor_path(self, published, digest):
-        return self.path_for(collector_521_path(
-            CollectorOutSubdirectory.RELAY_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.EXTRA_INFO, published, digest))
+        """
+        Generates a path, including the archive path, for a relay extra-info
+        descriptor with a given published time and digest. For example:
+
+        >>> archive = DirectoryArchive("/srv/archive")
+        >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
+        >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
+        >>> archive.relay_extra_info_descriptor_path(published, digest)  # doctest: +ELLIPSIS
+        '/srv/archive/relay-descriptors/extra-info/2018/11/a/9/a94a...389'
+
+        These paths are defined in §5.3.2 of [collector-protocol]_.
+
+        :param ~datetime.datetime published: The published time of the
+                                             descriptor.
+        :param str digest: The hex-encoded SHA-1 digest of the descriptor.
+
+        :returns: Path as a :py:class:`str`.
+        """
+        return self.path_for(
+            collector_521_path(
+                CollectorOutSubdirectory.RELAY_DESCRIPTORS,  # pylint: disable=no-member
+                CollectorOutRelayDescsMarker.EXTRA_INFO,  # pylint: disable=no-member
+                published,
+                digest))
 
     def relay_consensus_path(self, valid_after):
-        return self.path_for(collector_522_path(
-            CollectorOutSubdirectory.RELAY_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.CONSENSUS, valid_after,
-            collector_431_filename(valid_after)))
+        """
+        Generates a path, including the archive path, for a network-status
+        consensus with a given valid-after time. For example:
+
+        >>> archive = DirectoryArchive("/srv/archive")
+        >>> valid_after = datetime.datetime(2018, 11, 19, 15)
+        >>> archive.relay_consensus_path(valid_after)
+        '/srv/archive/relay-descriptors/consensus/2018/11/19/2018-11-19-15-00-00-consensus'
+
+        These paths are defined in §5.3.2 of [collector-protocol]_.
+
+        :param ~datetime.datetime valid_after: The valid-after time for the
+                                               status.
+        :param str fingerprint: The fingerprint of the bridge authority.
+
+        :returns: Path as a :py:class:`str`.
+        """
+        return self.path_for(
+            collector_522_path(
+                CollectorOutSubdirectory.RELAY_DESCRIPTORS,  # pylint: disable=no-member
+                CollectorOutRelayDescsMarker.CONSENSUS,  # pylint: disable=no-member
+                valid_after,
+                collector_431_filename(valid_after)))
 
     def relay_vote_path(self, valid_after, v3ident, digest):
-        return self.path_for(collector_522_path(
-            CollectorOutSubdirectory.RELAY_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.VOTE, valid_after,
-            collector_433_filename(valid_after, v3ident, digest)))
+        """
+        Generates a path, including the archive path, for a network-status vote
+        with a given valid-after time, generated by the authority with the
+        given v3ident, and with the given digest. For example:
+
+        >>> archive = DirectoryArchive("/srv/archive")
+        >>> valid_after = datetime.datetime(2018, 11, 19, 15)
+        >>> v3ident = "D586D18309DED4CD6D57C18FDB97EFA96D330566"  # moria1
+        >>> digest = "663B503182575D242B9D8A67334365FF8ECB53BB"
+        >>> archive.relay_vote_path(valid_after, v3ident, digest)  # doctest: +ELLIPSIS
+        '/srv/archive/relay-descriptors/vote/2018/11/19/2018-11-19-15-00-00-vote-D...-...B'
+
+        These paths are defined in §5.3.2 of [collector-protocol]_.
+
+        :param ~datetime.datetime valid_after: The valid-after time.
+        :param str v3ident: The v3ident of the directory authority.
+        :param str digest: The digest of the vote.
+
+        :returns: Path as a :py:class:`str`.
+        """
+        return self.path_for(
+            collector_522_path(
+                CollectorOutSubdirectory.RELAY_DESCRIPTORS,  # pylint: disable=no-member
+                CollectorOutRelayDescsMarker.VOTE,  # pylint: disable=no-member
+                valid_after,
+                collector_433_filename(valid_after, v3ident, digest)))
 
     ####################
     # Store Descriptor #
@@ -541,16 +669,17 @@ class DirectoryArchive:
         """
         Retrieves a relay's server descriptor from the archive.
 
-        :param str digest: A hex-encoded digest of the descriptor. 
+        :param str digest: A hex-encoded digest of the descriptor.
         :param ~datetime.datetime published_hint: Provides a hint on the
             published time to allow the descriptor to be found in the archive.
             If the descriptor was not published in the same month as this, it
             will not be found.
 
-        :returns: A :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.
+        :returns: A :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`
+                  if found, otherwise *None*.
         """
         published_hint = published_hint or valid_after_now()
-        _, path = self.relay_server_descriptor_path(published_hint, digest)
+        path = self.relay_server_descriptor_path(published_hint, digest)
         async with self.max_file_concurrency_lock:
             return await parse_file(
                 path, descriptor_type="server-descriptor 1.0")
@@ -559,18 +688,17 @@ class DirectoryArchive:
         """
         Retrieves a relay's extra-info descriptor from the archive.
 
-        :param str digest: A hex-encoded digest of the descriptor. 
+        :param str digest: A hex-encoded digest of the descriptor.
         :param ~datetime.datetime published_hint: Provides a hint on the
             published time to allow the descriptor to be found in the archive.
             If the descriptor was not published in the same month as this, it
             will not be found.
 
-        :returns: A
-                  :py:class:`~stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor` if
-                  found, else *None*.
+        :returns: A :py:class:`~stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor`
+                  if found, otherwise *None*.
         """
         published_hint = published_hint or valid_after_now()
-        _, path = self.relay_extra_info_descriptor_path(published_hint, digest)
+        path = self.relay_extra_info_descriptor_path(published_hint, digest)
         async with self.max_file_concurrency_lock:
             return await parse_file(path, descriptor_type="extra-info 1.0")
 
@@ -585,13 +713,12 @@ class DirectoryArchive:
             consensus with the given valid_after time, otherwise a vote that
             became valid at the top of the current hour will be retrieved.
 
-        :returns: A
-                  :py:class:`~stem.descriptor.networkstatus.NetworkStatusDocumentV3` if found,
-                  else *None*.
+        :returns: A :py:class:`~stem.descriptor.networkstatus.NetworkStatusDocumentV3`
+                  if found, otherwise *None*.
         """
         valid_after = valid_after or valid_after_now()
         digest = digest.upper()
-        _, path = self.relay_vote_path(valid_after, v3ident, digest)
+        path = self.relay_vote_path(valid_after, v3ident, digest)
         if digest == "*":
             try:
                 path = (await aglob(path))[0]
@@ -614,25 +741,8 @@ class DirectoryArchive:
                   if found, otherwise *None*.
         """
         valid_after = valid_after or valid_after_now()
-        _, path = self.relay_consensus_path(valid_after)
+        path = self.relay_consensus_path(valid_after)
         print(path)
         async with self.max_file_concurrency_lock:
             return await parse_file(
                 path, descriptor_type="network-status-consensus-3 1.0")
-
-    #async def descriptor(self, doctype, digest=None, published_hint=None):
-    #    if self.legacy_archive:
-    #        # TODO: Check earlier days too
-    #        _, path = self._descriptor_path(MARKERS[doctype], published_hint,
-    #                                        digest)
-    #    else:
-    #        _, path = self._descriptor_digest_path(MARKERS[doctype], "sha1",
-    #                                               digest)
-    #    try:
-    #        async with self.max_file_concurrency_lock:
-    #            async with aiofiles.open(path, 'rb') as source:
-    #                raw_content = await source.read()
-    #                return next(await parse_bytes(raw_content))
-    #    except FileNotFoundError:
-    #        LOG.debug("The file was not present in the store.")
-    #        return None
