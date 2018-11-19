@@ -30,7 +30,7 @@ descriptors.
   STATUS                  Bridge statuses (§5.2.2)
   ======================= ===========
 
-.. data:: CollectorOutBridgeDescsMarker (enum)
+.. data:: CollectorOutRelayDescsMarker (enum)
 
   Marker names under the "relay-descriptors" directory as specified in
   §5.3 of [collector-protocol]_.
@@ -44,7 +44,6 @@ descriptors.
   VOTE                    Network status votes (§5.3.2)
   ======================= ===========
 """
-
 import asyncio
 import datetime
 import functools
@@ -65,8 +64,6 @@ from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
 from stem.descriptor.networkstatus import NetworkStatusDocumentV3
 from stem.util import enum
 
-from bushel import SERVER_DESCRIPTOR
-from bushel import EXTRA_INFO_DESCRIPTOR
 
 LOG = logging.getLogger('')
 
@@ -121,12 +118,17 @@ async def aglob(pathname, recursive=False):
 def collector_422_filename(valid_after, fingerprint):
     """
     Create a filename for a bridge status according to §4.2.2 of the
-    [collector-protocol]_.
+    [collector-protocol]_. For example:
 
-    :param datetime.datetime valid_after: The valid-after time.
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
+    >>> fingerprint = "BA44A889E64B93FAA2B114E02C2A279A8555C533" # Serge
+    >>> collector_422_filename(valid_after, fingerprint)
+    '20181119-150000-BA44A889E64B93FAA2B114E02C2A279A8555C533'
+
+    :param ~datetime.datetime valid_after: The valid-after time.
     :param str fingerprint: The fingerprint of the bridge authority.
 
-    :returns: The filename as a *str*.
+    :returns: The filename as a :py:class:`str`.
     """
     return (f"{valid_after.year}{valid_after.month:02d}"
             f"{valid_after.day:02d}-{valid_after.hour:02d}"
@@ -137,11 +139,15 @@ def collector_422_filename(valid_after, fingerprint):
 def collector_431_filename(valid_after):
     """
     Create a filename for a network status consensus according to §4.3.1 of the
-    [collector-protocol]_.
+    [collector-protocol]_. For example:
 
-    :param datetime.datetime valid_after: The valid-after time.
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
+    >>> collector_431_filename(valid_after)
+    '2018-11-19-15-00-00-consensus'
 
-    :returns: The filename as a *str*.
+    :param ~datetime.datetime valid_after: The valid-after time.
+
+    :returns: The filename as a :py:class:`str`.
     """
     return (f"{valid_after.year}-{valid_after.month:02d}-"
             f"{valid_after.day:02d}-{valid_after.hour:02d}-"
@@ -153,15 +159,28 @@ def collector_433_filename(valid_after, v3ident, digest):
     Create a filename for a network status vote according to §4.3.3 of the
     [collector-protocol]_.
 
-    .. warning:: Paths in the Collector File Structure Protocol using this
-                 filename expect *upper-case* hex-encoded SHA-1 digests.
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
+    >>> v3ident = "D586D18309DED4CD6D57C18FDB97EFA96D330566" # moria1
+    >>> digest = "663B503182575D242B9D8A67334365FF8ECB53BB"
+    >>> collector_433_filename(valid_after, v3ident, digest)
+    '2018-11-19-15-00-00-vote-D586D18309DED4CD6D57C18FDB97EFA96D330566-663B503182575D242B9D8A67334365FF8ECB53BB'
 
-    :param datetime.datetime valid_after: The valid-after time.
+    Paths in the Collector File Structure Protocol using this filename expect
+    *upper-case* hex-encoded SHA-1 digests.
+
+    >>> v3ident = "d586d18309ded4cd6d57c18fdb97efa96d330566" # Lower case gets corrected
+    >>> digest = "663b503182575d242b9d8a67334365ff8ecb53bb" # Lower case gets corrected
+    >>> collector_433_filename(valid_after, v3ident, digest)
+    '2018-11-19-15-00-00-vote-D586D18309DED4CD6D57C18FDB97EFA96D330566-663B503182575D242B9D8A67334365FF8ECB53BB'
+
+    :param ~datetime.datetime valid_after: The valid-after time.
     :param str v3ident: The v3ident of the directory authority.
     :param str digest: The digest of the vote.
 
-    :returns: The filename as a *str*.
+    :returns: The filename as a :py:class:`str`.
     """
+    v3ident = v3ident.upper()
+    digest = digest.upper()
     return (f"{valid_after.year}-{valid_after.month:02d}-"
             f"{valid_after.day:02d}-{valid_after.hour:02d}-"
             f"{valid_after.minute:02d}-{valid_after.second:02d}-vote-"
@@ -172,34 +191,123 @@ def collector_521_substructure(published, digest):
     """
     Create a path substructure according to §5.2.1 of the
     [collector-protocol]_. This is used for server-descriptors and extra-info
-    descriptors for both relays and bridges.
+    descriptors for both relays and bridges. For example:
 
-    .. warning:: Paths in the Collector File Structure Protocol using this
-                 substructure expect *lower-case* hex-encoded SHA-1 digests.
+    >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
+    >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
+    >>> collector_521_substructure(published, digest)
+    '2018/11/a/9'
 
-    :param datetime.datetime published: The published time.
+    Paths in the Collector File Structure Protocol using this substructure
+    expect *lower-case* hex-encoded SHA-1 digests.
+
+    >>> digest = "A94A07B201598D847105AE5FCD5BC3AB10124389" # Upper case gets corrected
+    >>> collector_521_substructure(published, digest)
+    '2018/11/a/9'
+
+    :param ~datetime.datetime published: The published time.
     :param str digest: The hex-encoded SHA-1 digest for the descriptor. The
                        case will automatically be fixed to lower-case.
 
-    :returns: The path substructure as a *str*.
+    :returns: The path substructure as a :py:class:`str`.
     """
     digest = digest.lower()
     return os.path.join(f"{published.year}", f"{published.month:02d}",
                         f"{digest[0]}", f"{digest[1]}")
 
+def collector_521_path(subdirectory, marker, published, digest):
+    """
+    Create a path according to §5.2.1 of the [collector-protocol]_. This is
+    used for server-descriptors and extra-info descriptors for both relays and
+    bridges. For example:
+
+    >>> subdirectory = CollectorOutSubdirectory.RELAY_DESCRIPTORS
+    >>> marker = CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR
+    >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
+    >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
+    >>> collector_521_path(subdirectory, marker, published, digest)
+    'relay-descriptors/server-descriptor/2018/11/a/9/a94a07b201598d847105ae5fcd5bc3ab10124389'
+
+    Paths in the Collector File Structure Protocol using this substructure
+    expect *lower-case* hex-encoded SHA-1 digests.
+
+    >>> digest = "A94A07B201598D847105AE5FCD5BC3AB10124389" # Upper case gets corrected
+    >>> collector_521_path(subdirectory, marker, published, digest)
+    'relay-descriptors/server-descriptor/2018/11/a/9/a94a07b201598d847105ae5fcd5bc3ab10124389'
+
+    :param str subdirectory: The subdirectory under the "out" directory to
+                             use. Standard values can be found in
+                             :py:data:`CollectorOutSubdirectory`.
+    :param str marker: The marker under the subdirectory to use. Standard values
+                       can be found in :py:data:`CollectorOutRelayDescsMarker`
+                       and :py:data:`CollectorOutBridgeDescsMarker`.
+    :param ~datetime.datetime published: The published time.
+    :param str digest: The hex-encoded SHA-1 digest for the descriptor. The
+                       case will automatically be fixed to lower-case.
+
+    :returns: The path for the descriptor as a :py:class:`str`.
+    """
+    digest = digest.lower()
+    return os.path.join(subdirectory, marker,
+                        collector_521_substructure(published, digest),
+                        f"{digest}")
 
 def collector_522_substructure(valid_after):
     """
     Create a path substructure according to §5.2.2 of the
     [collector-protocol]_. This is used for bridge statuses, and network-status
-    consensuses and votes.
+    consensuses and votes. For example:
 
-    :param datetime.datetime valid_after: The valid-after time.
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
+    >>> collector_522_substructure(valid_after)
+    '2018/11/19'
 
-    :returns: The path substructure as a *str*.
+    :param ~datetime.datetime valid_after: The valid-after time.
+
+    :returns: The path substructure as a :py:class:`str`.
     """
     return os.path.join(f"{valid_after.year}", f"{valid_after.month:02d}",
                         f"{valid_after.day:02d}")
+
+def collector_522_path(subdirectory, marker, valid_after, filename):
+    """
+    Create a path according to §5.2.2 of the [collector-protocol]_. This is
+    used for bridge statuses, and network-status consensuses and votes. For
+    example:
+
+    >>> subdirectory = CollectorOutSubdirectory.BRIDGE_DESCRIPTORS
+    >>> marker = CollectorOutBridgeDescsMarker.STATUSES
+    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> fingerprint = "BA44A889E64B93FAA2B114E02C2A279A8555C533" # Serge
+    >>> filename = collector_422_filename(valid_after, fingerprint)
+    >>> collector_522_path(subdirectory, marker, valid_after, filename)
+    'bridge-descriptors/statuses/2018/11/19/20181119-150000-BA44A889E64B93FAA2B114E02C2A279A8555C533'
+
+    >>> subdirectory = CollectorOutSubdirectory.RELAY_DESCRIPTORS
+    >>> marker = CollectorOutRelayDescsMarker.CONSENSUS
+    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> filename = collector_431_filename(valid_after)
+    >>> collector_522_path(subdirectory, marker, valid_after, filename)
+    'relay-descriptors/consensus/2018/11/19/2018-11-19-15-00-00-consensus'
+
+    :param str subdirectory: The subdirectory under the "out" directory to
+                             use. Standard values can be found in
+                             :py:data:`CollectorOutSubdirectory`.
+    :param str marker: The marker under the subdirectory to use. Standard values
+                       can be found in :py:data:`CollectorOutRelayDescsMarker`
+                       and :py:data:`CollectorOutBridgeDescsMarker`.
+    :param ~datetime.datetime valid_after: The valid_after time.
+    :param str filename: The filename to use as a :py:class:`str`, typically
+                         created with :py:func:`collector_422_filename` for
+                         bridge statuses, :py:func:`collector_431_filename` for
+                         network-status consensuses, or
+                         :py:func:`collector_433_filename` for network-status
+                         votes.
+
+    :returns: The path for the descriptor as a :py:class:`str`.
+    """
+    return os.path.join(subdirectory, marker,
+                        collector_522_substructure(valid_after), filename)
 
 
 def _type_annotation_for(descriptor):
@@ -326,15 +434,17 @@ class DirectoryArchive:
 
         :returns: Archive path for the descriptor as a :py:class:`str`.
         """
-        if isinstance(descriptor, RelayDescriptor):
-            dpath, fpath = self.relay_server_descriptor_path(
+        if isinstance(descriptor, str):
+            fpath = os.path.join(self.archive_path, descriptor)
+        elif isinstance(descriptor, RelayDescriptor):
+            fpath = self.relay_server_descriptor_path(
                 descriptor.published, descriptor.digest())
         elif isinstance(descriptor, RelayExtraInfoDescriptor):
-            dpath, fpath = self.relay_extra_info_descriptor_path(
+            fpath = self.relay_extra_info_descriptor_path(
                 descriptor.published, descriptor.digest())
         elif isinstance(descriptor, NetworkStatusDocumentV3) and \
               descriptor.is_consensus:
-            dpath, fpath = self.relay_consensus_path(descriptor.valid_after)
+            fpath = self.relay_consensus_path(descriptor.valid_after)
         elif isinstance(descriptor, NetworkStatusDocumentV3) and \
               descriptor.is_vote:
             # TODO: The digest functionality should be appearing in stem.
@@ -343,7 +453,7 @@ class DirectoryArchive:
             raw_content = stem.util.str_tools._to_bytes(
                 raw_content[:raw_content.find(ending) + len(ending)])
             digest = hashlib.sha1(raw_content).hexdigest().upper()
-            dpath, fpath = self.relay_vote_path(
+            fpath = self.relay_vote_path(
                 descriptor.valid_after,
                 descriptor.directory_authorities[0].v3ident, digest)
         else:
@@ -352,6 +462,7 @@ class DirectoryArchive:
                 f"Attempted to store unknown descriptor type {type(descriptor)}"
             )
         if create_dir:
+            dpath = os.path.dirname(fpath)
             os.makedirs(dpath, exist_ok=True)
         return fpath
 
@@ -359,64 +470,51 @@ class DirectoryArchive:
     # §5.2.1           #
     ####################
 
-    def collector_521_path(self, subdirectory, marker, published, digest):
-        digest = digest.lower()
-        dpath = os.path.join(self.archive_path, subdirectory, marker,
-                             collector_521_substructure(published, digest))
-        fpath = os.path.join(dpath, f"{digest}")
-        return dpath, fpath
-
     def bridge_server_descriptor_path(self, published, digest):
-        return self.collector_521_path(
+        return self.path_for(collector_521_path(
             CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR, published, digest)
+            CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR, published, digest))
 
     def bridge_extra_info_descriptor_path(self, published, digest):
-        return self.collector_521_path(
+        return self.path_for(collector_521_path(
             CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.EXTRA_INFO, published, digest)
+            CollectorOutRelayDescsMarker.EXTRA_INFO, published, digest))
 
     ####################
     # §5.2.2           #
     ####################
 
-    def collector_522_path(self, subdirectory, marker, valid_after, filename):
-        dpath = os.path.join(self.archive_path, subdirectory, marker,
-                             collector_522_substructure(valid_after))
-        fpath = os.path.join(dpath, filename)
-        return dpath, fpath
-
     def bridge_status_path(self, valid_after, fingerprint):
-        return self.collector_522_path(
+        return self.path_for(collector_522_path(
             CollectorOutSubdirectory.BRIDGE_DESCRIPTORS,
             CollectorOutBridgeDescsMarker.STATUSES, valid_after,
-            collector_422_filename(valid_after, fingerprint))
+            collector_422_filename(valid_after, fingerprint)))
 
     ####################
     # §5.3.2           #
     ####################
 
     def relay_server_descriptor_path(self, published, digest):
-        return self.collector_521_path(
+        return self.path_for(collector_521_path(
             CollectorOutSubdirectory.RELAY_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR, published, digest)
+            CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR, published, digest))
 
     def relay_extra_info_descriptor_path(self, published, digest):
-        return self.collector_521_path(
+        return self.path_for(collector_521_path(
             CollectorOutSubdirectory.RELAY_DESCRIPTORS,
-            CollectorOutRelayDescsMarker.EXTRA_INFO, published, digest)
+            CollectorOutRelayDescsMarker.EXTRA_INFO, published, digest))
 
     def relay_consensus_path(self, valid_after):
-        return self.collector_522_path(
+        return self.path_for(collector_522_path(
             CollectorOutSubdirectory.RELAY_DESCRIPTORS,
             CollectorOutRelayDescsMarker.CONSENSUS, valid_after,
-            collector_431_filename(valid_after))
+            collector_431_filename(valid_after)))
 
     def relay_vote_path(self, valid_after, v3ident, digest):
-        return self.collector_522_path(
+        return self.path_for(collector_522_path(
             CollectorOutSubdirectory.RELAY_DESCRIPTORS,
             CollectorOutRelayDescsMarker.VOTE, valid_after,
-            collector_433_filename(valid_after, v3ident, digest))
+            collector_433_filename(valid_after, v3ident, digest)))
 
     ####################
     # Store Descriptor #
@@ -440,6 +538,17 @@ class DirectoryArchive:
     ####################
 
     async def relay_server_descriptor(self, digest, published_hint):
+        """
+        Retrieves a relay's server descriptor from the archive.
+
+        :param str digest: A hex-encoded digest of the descriptor. 
+        :param ~datetime.datetime published_hint: Provides a hint on the
+            published time to allow the descriptor to be found in the archive.
+            If the descriptor was not published in the same month as this, it
+            will not be found.
+
+        :returns: A :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.
+        """
         published_hint = published_hint or valid_after_now()
         _, path = self.relay_server_descriptor_path(published_hint, digest)
         async with self.max_file_concurrency_lock:
@@ -447,6 +556,19 @@ class DirectoryArchive:
                 path, descriptor_type="server-descriptor 1.0")
 
     async def relay_extra_info_descriptor(self, digest, published_hint):
+        """
+        Retrieves a relay's extra-info descriptor from the archive.
+
+        :param str digest: A hex-encoded digest of the descriptor. 
+        :param ~datetime.datetime published_hint: Provides a hint on the
+            published time to allow the descriptor to be found in the archive.
+            If the descriptor was not published in the same month as this, it
+            will not be found.
+
+        :returns: A
+                  :py:class:`~stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor` if
+                  found, else *None*.
+        """
         published_hint = published_hint or valid_after_now()
         _, path = self.relay_extra_info_descriptor_path(published_hint, digest)
         async with self.max_file_concurrency_lock:
@@ -457,16 +579,18 @@ class DirectoryArchive:
         Retrieves a vote from the archive.
 
         :param str v3ident: The v3ident of the authority that created the vote.
-        :param str digest: A hex-encoded digest of the vote. If set to "*" then
-                           a vote, but only one vote, will be returned if any
-                           vote is available for the given v3ident and
-                           valid_after time.
-        :param datetime valid_after: If set, will retrieve a consensus with the
-                                     given valid_after time, otherwise a
-                                     vote that became valid at the top
-                                     of the current hour will be retrieved.
+        :param str digest: A hex-encoded digest of the vote. This will
+                           automatically be fixed to upper-case.
+        :param ~datetime.datetime valid_after: If set, will retrieve a
+            consensus with the given valid_after time, otherwise a vote that
+            became valid at the top of the current hour will be retrieved.
+
+        :returns: A
+                  :py:class:`~stem.descriptor.networkstatus.NetworkStatusDocumentV3` if found,
+                  else *None*.
         """
         valid_after = valid_after or valid_after_now()
+        digest = digest.upper()
         _, path = self.relay_vote_path(valid_after, v3ident, digest)
         if digest == "*":
             try:
@@ -481,7 +605,7 @@ class DirectoryArchive:
         """
         Retrieves a consensus from the archive.
 
-        :param datetime valid_after: If set, will retrieve a consensus with the
+        :param ~datetime.datetime valid_after: If set, will retrieve a consensus with the
                                      given valid_after time, otherwise a vote
                                      that became valid at the top of the
                                      current hour will be retrieved.
