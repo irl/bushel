@@ -1,6 +1,8 @@
 """
 Persistent filesystem-backed archive for Tor directory protocol
-descriptors.
+descriptors. This is intended to be used as part of an :py:mod:`asyncio`
+application. File I/O operations are provided by coroutines and coroutine
+methods, with the actual I/O performed in an executor.
 
 .. data:: CollectorOutSubdirectory (enum)
 
@@ -66,7 +68,7 @@ from stem.descriptor.extrainfo_descriptor import BridgeExtraInfoDescriptor
 from stem.descriptor.networkstatus import NetworkStatusDocumentV3
 from stem.util import enum
 
-LOG = logging.getLogger('')
+LOG = logging.getLogger('bushel')
 
 CollectorOutSubdirectory = enum.Enum(  # pylint: disable=invalid-name
     ('BRIDGE_DESCRIPTORS', 'bridge-descriptors'),
@@ -376,13 +378,8 @@ class DirectoryArchive:
     Persistent filesystem-backed archive for Tor directory protocol
     descriptors.
 
-    This implements a superset of the CollecTor filesystem protocol as
-    detailed in [collector-protocol]_. The additional functionality is used
-    to allow quick retrieval of descriptors by their digest by creating a
-    parallel directory hierachy containing symlinks. The assumption is that
-    the filesystem has better data structures for traversing a hash tree than
-    can be hacked on in the time available for this prototype. This extra
-    functionality may disappear in later versions.
+    This implements the CollecTor File Structure Protocol as detailed in
+    [collector-protocol]_.
 
     :param str archive_path: Either an absolute or relative path to the
                              location of the directory to use for the archive.
@@ -395,7 +392,7 @@ class DirectoryArchive:
     def __init__(self,
                  archive_path,
                  legacy_archive=False,
-                 max_file_concurrency=200):
+                 max_file_concurrency=100):
         self.archive_path = archive_path
         self.legacy_archive = legacy_archive
         self.max_file_concurrency_lock = asyncio.BoundedSemaphore(
@@ -650,16 +647,10 @@ class DirectoryArchive:
 
     async def store(self, descriptor):
         path = self.path_for(descriptor, create_dir=True)
+        LOG.info("Saving: %s", path)
         async with self.max_file_concurrency_lock:
             async with aiofiles.open(path, 'wb') as output:
                 await output.write(prepare_annotated_content(descriptor))
-            if not isinstance(descriptor, NetworkStatusDocumentV3):
-                pass
-                # TODO: Create symlinks for descriptors too
-                #digest_path = self.digest_path_for(
-                #    descriptor, "sha1", create_dir=True)
-                # TODO: Make the symlink async
-                #os.symlink(os.path.abspath(path), digest_path)
 
     ####################
     # Get Descriptor   #
@@ -684,6 +675,25 @@ class DirectoryArchive:
             return await parse_file(
                 path, descriptor_type="server-descriptor 1.0")
 
+    async def relay_server_descriptors(self, digests, published_hint):
+        """
+        Retrieves multiple server descriptors published around the same time
+        (e.g. all referenced by the same consensus).
+
+        :param list(str) digest: Hex-encoded digests for the descriptors.
+        :param ~datetime.datetime published_hint: Provides a hint on the
+            published time to allow the descriptor to be found in the archive.
+            If the descriptor was not published in the same month as this, it
+            will not be found.
+
+        :returns: A :py:class:`list` of
+                  :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.
+        """
+        return [descriptor for descriptor in await asyncio.gather(*[
+            self.relay_server_descriptor(digest, published_hint)
+            for digest in digests
+        ]) if descriptor]
+
     async def relay_extra_info_descriptor(self, digest, published_hint):
         """
         Retrieves a relay's extra-info descriptor from the archive.
@@ -702,7 +712,26 @@ class DirectoryArchive:
         async with self.max_file_concurrency_lock:
             return await parse_file(path, descriptor_type="extra-info 1.0")
 
-    async def vote(self, v3ident, digest="*", valid_after=None):
+    async def relay_extra_info_descriptors(self, digests, published_hint):
+        """
+        Retrieves multiple extra-info descriptors published around the same time
+        (e.g. all referenced by server-descriptors in the same consensus).
+
+        :param list(str) digest: Hex-encoded digests for the descriptors.
+        :param ~datetime.datetime published_hint: Provides a hint on the
+            published time to allow the descriptor to be found in the archive.
+            If the descriptor was not published in the same month as this, it
+            will not be found.
+
+        :returns: A :py:class:`list` of
+                  :py:class:`stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor`.
+        """
+        return [descriptor for descriptor in await asyncio.gather(*[
+            self.relay_extra_info_descriptor(digest, published_hint)
+            for digest in digests
+        ]) if descriptor]
+
+    async def relay_vote(self, v3ident, digest="*", valid_after=None):
         """
         Retrieves a vote from the archive.
 
@@ -728,7 +757,7 @@ class DirectoryArchive:
             return await parse_file(
                 path, descriptor_type="network-status-vote-3 1.0")
 
-    async def consensus(self, valid_after=None):
+    async def relay_consensus(self, valid_after=None):
         """
         Retrieves a consensus from the archive.
 

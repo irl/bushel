@@ -27,7 +27,7 @@ def main():
         "scrape",
         help="Recursively download all documents referenced by the latest consensus"
     )
-    parser_scrape.add_argument("--no-votes", help="Do not download votes first, they will still be discovered from the consensus however", action="store_true")
+    parser_scrape.add_argument("--client", help="Download in client mode", action="store_true")
     parser_scrape.add_argument("--archive-path", help="Alternative path to the archive", default=".")
     parser_scrape.set_defaults(coro=scrape)
 

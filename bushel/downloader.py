@@ -4,71 +4,61 @@ import logging
 import random
 import socket
 import urllib.error
+from itertools import chain
 
 import stem
 from stem import DirPort
+from stem.descriptor.remote import MAX_FINGERPRINTS
 from stem.descriptor.remote import DescriptorDownloader
 
 from bushel import DIRECTORY_AUTHORITIES
-from bushel import EXTRA_INFO_DESCRIPTOR
 from bushel import LOCAL_DIRECTORY_CACHE
 from bushel import SERVER_DESCRIPTOR
 from bushel import DirectoryCacheMode
 
 LOG = logging.getLogger('')
 
+chunks = lambda l, n: [l[i:i + n] for i in range(0, len(l), n)]
 
 
-def url_for(doctype, fingerprint=None, digest=None):
+def relay_server_descriptors_query_path(digests):
     """
-    Builds a URL to be used to download a resource.
+    Generates a query path to request server descriptors by digests from a
+    directory server.  For example:
 
-    To fetch all available server descriptors, for example (please don't do
-    this regularly unless using your own local directory cache):
+    >>> digests = ["A94A07B201598D847105AE5FCD5BC3AB10124389",
+    ...            "B38974987323394795879383ABEF4893BD4895A8"]
+    >>> relay_server_descriptors_query_path(digests)  # doctest: +ELLIPSIS
+    '/tor/server/d/A94A07B201598D847105...24389+B3897498732339479587...95A8'
 
-    >>> url_for(SERVER_DESCRIPTOR)
-    '/tor/server/all'
+    These query paths are defined in appendix B of [dir-spec]_.
 
-    To fetch a specific server descriptor, you can specify a *fingerprint* or
-    a *digest*:
+    :param list(str) digests: The hex-encoded SHA-1 digests for the
+                              descriptors.
 
-    >>> url_for(SERVER_DESCRIPTOR,
-    ...              fingerprint="CF0CC69DE1E7E75A2D995FD8D9FA7D20983531DA")
-    '/tor/server/fp/CF0CC69DE1E7E75A2D995FD8D9FA7D20983531DA'
-
-    .. warning:: If both a digest and fingerprint are specified, strange and
-                 unpredictable things may happen.
-
-    To fetch multiple descriptors simultaneously, you can pass a list to the
-    fingerprint or digest parameters. In the generated URL, these will be
-    sorted such that any ordering of the same fingerprints or digests will
-    always produce the same URL (although the sorting algorithm may change
-    between releases).
-
-    >>> url_for(SERVER_DESCRIPTOR,
-    ...              fingerprint=["E59CC0060074E14CA8E9469999B862C5E1CE49E9",
-    ...                           "CF0CC69DE1E7E75A2D995FD8D9FA7D20983531DA"])
-    '/tor/server/fp/CF0CC69DE1E7E75A2D995FD8D9FA7D20983531DA+E59CC0060074E14CA8E9469999B862C5E1CE49E9'
+    :returns: Query path as a :py:class:`str`.
     """
-    if fingerprint is None and digest is None:
-        suffix = "all"
-    elif fingerprint is not None:
-        suffix = "fp/"
-        if isinstance(fingerprint, str):
-            suffix += fingerprint
-        else:
-            suffix += "+".join(sorted(list(fingerprint)))
-    else:  # digest must be set
-        suffix = "d/"
-        if isinstance(digest, str):
-            suffix += digest
-        else:
-            suffix += "+".join(sorted(list(digest)))
-    if doctype is SERVER_DESCRIPTOR:
-        return "/tor/server/" + suffix
-    if doctype is EXTRA_INFO_DESCRIPTOR:
-        return "/tor/extra/" + suffix
-    raise RuntimeError("Unknown document type requested")
+    return "/tor/server/d/" + "+".join(digests)
+
+
+def relay_extra_info_descriptors_query_path(digests):
+    """
+    Generates a query path to request extra-info descriptors by digests
+    from a directory server.  For example:
+
+    >>> digests = ["A94A07B201598D847105AE5FCD5BC3AB10124389",
+    ...            "B38974987323394795879383ABEF4893BD4895A8"]
+    >>> relay_extra_info_descriptors_query_path(digests)  # doctest: +ELLIPSIS
+    '/tor/extra/d/A94A07B201598D847105...24389+B3897498732339479587...95A8'
+
+    These query paths are defined in appendix B of [dir-spec]_.
+
+    :param list(str) digests: The hex-encoded SHA-1 digests for the
+                              descriptors.
+
+    :returns: Query path as a :py:class:`str`.
+    """
+    return "/tor/extra/d/" + "+".join(digests)
 
 
 class DirectoryDownloader:
@@ -89,11 +79,6 @@ class DirectoryDownloader:
               cached consensus should not be relied upon by external code. The
               cached consensus will never be served as a response to a request
               for a consensus.
-
-    .. warning:: Switching between directory cache and client modes clears the
-                 state that records which servers have been queried for
-                 descriptors and should not have further requests made. Ensure
-                 that you are not switching modes too often.
     """
 
     def __init__(self,
@@ -102,7 +87,8 @@ class DirectoryDownloader:
                  max_concurrency=9):
         self.max_concurrency_lock = asyncio.BoundedSemaphore(max_concurrency)
         self.current_consensus = initial_consensus
-        self.set_mode(directory_cache_mode or DirectoryCacheMode.DIRECTORY_CACHE)
+        self.set_mode(directory_cache_mode
+                      or DirectoryCacheMode.DIRECTORY_CACHE)
         self.downloader = DescriptorDownloader(
             timeout=5,
             retries=0,
@@ -111,7 +97,8 @@ class DirectoryDownloader:
 
     def set_mode(self, directory_cache_mode):
         if directory_cache_mode == DirectoryCacheMode.DIRECTORY_CACHE:
-            self.endpoints = self.extra_info_endpoints = self.directory_authorities()
+            self.endpoints = \
+                self.extra_info_endpoints = self.directory_authorities()
         elif directory_cache_mode == DirectoryCacheMode.CLIENT:
             self.endpoints = self.directory_caches()
             self.extra_info_endpoints = self.directory_caches(extra_info=True)
@@ -139,25 +126,21 @@ class DirectoryDownloader:
         """
         if self.current_consensus is None:
             # TODO: Check also that it's fresh!
-            LOG.warning("Tried to use directory caches but we don't have a consensus")
+            LOG.warning(
+                "Tried to use directory caches but we don't have a consensus")
             return self.directory_authorities()
         directory_caches = [a.dir_port for a in DIRECTORY_AUTHORITIES]
         for router in self.current_consensus.routers.values():
             if extra_info and self.descriptor_cache:
-                server_descriptor = self.descriptor_cache(SERVER_DESCRIPTOR, router.digest)
-                if (not server_descriptor) or (not server_descriptor.extra_info_cache):
+                server_descriptor = self.descriptor_cache(
+                    SERVER_DESCRIPTOR, router.digest)
+                if (not server_descriptor) or (
+                        not server_descriptor.extra_info_cache):
                     continue
-            if stem.Flag.V2DIR in router.flags and router.dir_port: # pylint: disable=no-member
+            if stem.Flag.V2DIR in router.flags and router.dir_port:  # pylint: disable=no-member
                 directory_caches.append(
                     DirPort(router.address, router.dir_port))
         return directory_caches
-
-    def _consensus_is_fresh(self):
-        """
-        Returns True if the latest known consensus is both valid and fresh,
-        otherwise False.
-        """
-        raise NotImplementedError()
 
     async def _consensus_attempt(self, endpoint):
         query = self.downloader.get_consensus(
@@ -178,14 +161,19 @@ class DirectoryDownloader:
             if consensus:
                 return consensus
 
-    async def vote(self, valid_after=None, v3ident=None, digest="*", endpoint=None):
+    async def vote(self,
+                   valid_after=None,
+                   v3ident=None,
+                   digest="*",
+                   endpoint=None):
         if digest == "*":
             url = f"/tor/status-vote/current/authority"
             #url = f"/tor/status-vote/{'next' if next_vote else 'current'}/authority"
         else:
             url = f"/tor/status-vote/current/d/{digest}"
-        query = self.downloader.query(url,
-            document_handler=stem.descriptor.DocumentHandler.DOCUMENT, # pylint: disable=no-member
+        query = self.downloader.query(
+            url,
+            document_handler=stem.descriptor.DocumentHandler.DOCUMENT,  # pylint: disable=no-member
             endpoints=[endpoint] if endpoint else self.directory_authorities())
         LOG.debug("Started consensus download")
         while not query.is_done:
@@ -194,25 +182,64 @@ class DirectoryDownloader:
         for vote in query:
             return vote
 
-    async def descriptor(self, doctype, digest=None, endpoint=None):
+    async def _multiple_descriptors(self, query_path_function, digests,
+                                    endpoints):
         loop = asyncio.get_running_loop()
-        if endpoint is None:
-            endpoints = self.endpoints if doctype != EXTRA_INFO_DESCRIPTOR \
-                else self.extra_info_endpoints
-            endpoints = endpoints.copy()
-            random.shuffle(endpoints)
-        else:
-            endpoints = [endpoint]
-        attempts = 20
-        for attempt_endpoint in endpoints:
-            query = self.downloader.query(
-                url_for(doctype, digest=digest), endpoints=[attempt_endpoint])
-            result = await loop.run_in_executor(
-                None, functools.partial(query.run, suppress=True))
-            if result:
-                return result[0]
-            attempts -= 1
-            if not attempts:
-                break
-        if endpoint:
-            return await self.descriptor(doctype, digest=digest)
+        descriptors = []
+        endpoints = endpoints.copy()
+        random.shuffle(endpoints)
+        while endpoints and digests:
+            endpoint = endpoints.pop()
+            async with self.max_concurrency_lock:
+                query = self.downloader.query(
+                    query_path_function(digests), endpoints=[endpoint])
+                result = await loop.run_in_executor(
+                    None, functools.partial(query.run, suppress=True))
+            for descriptor in result:
+                digests.remove(descriptor.digest())
+                descriptors.append(descriptor)
+        return descriptors
+
+    async def relay_server_descriptors(self, digests, published_hint=None):
+        """
+        Retrieves multiple server descriptors from directory servers.
+
+        :param list(str) digest: Hex-encoded digests for the descriptors.
+        :param ~datetime.datetime published_hint: Provides a hint on the
+            published time. Currently this is unused, but is accepted for
+            compatibility with other directory sources. In the future this may
+            be used to avoid attempts to download descriptors that it is likely
+            are long gone.
+
+        :returns: A :py:class:`list` of
+                  :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.
+        """
+        batches = chunks(digests, MAX_FINGERPRINTS)
+        return list(
+            chain(*await asyncio.gather(*[
+                self._multiple_descriptors(relay_server_descriptors_query_path,
+                                           batch, self.endpoints)
+                for batch in batches
+            ])))
+
+    async def relay_extra_info_descriptors(self, digests, published_hint=None):
+        """
+        Retrieves multiple server descriptors from directory servers.
+
+        :param list(str) digest: Hex-encoded digests for the descriptors.
+        :param ~datetime.datetime published_hint: Provides a hint on the
+            published time. Currently this is unused, but is accepted for
+            compatibility with other directory sources. In the future this may
+            be used to avoid attempts to download descriptors that it is likely
+            are long gone.
+
+        :returns: A :py:class:`list` of
+                  :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.
+        """
+        batches = chunks(digests, MAX_FINGERPRINTS)
+        return list(
+            chain(*await asyncio.gather(*[
+                self._multiple_descriptors(
+                    relay_extra_info_descriptors_query_path, batch,
+                    self.extra_info_endpoints) for batch in batches
+            ])))

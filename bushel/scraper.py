@@ -73,7 +73,9 @@ class DirectoryScraper:
         else:
             return await self._discover_votes_directly(next_vote)
 
-    async def discover_server_descriptors(self, statuses, endpoint_preference=True):
+    async def discover_server_descriptors(self,
+                                          statuses,
+                                          endpoint_preference=True):
         """
         Retrieves the server descriptors referenced by *statuses*. In the case
         that descriptors are referenced by a vote, this hint will be provided
@@ -86,36 +88,18 @@ class DirectoryScraper:
                   :py:class:`~stem.descriptor.server_descriptor.RelayDescriptor`
                   containing all discovered votes.
         """
-        referencing_endpoints = defaultdict(list)
+        digests = []
         for status in statuses:
-            endpoint = None
-            if status.is_vote:
-                endpoint = dir_port_from_v3ident(
-                    status.directory_authorities[0].v3ident)
-            for status_entry in status.routers.values():
-                referencing_endpoints[status_entry.digest].append(endpoint)
-        if endpoint_preference:
-            all_endpoints = list(set(chain(*referencing_endpoints.values())))
-            endpoint_assignments = defaultdict(list)
-            for digest in referencing_endpoints:
-                endpoint_assignments[random.choice(all_endpoints)].append(digest)
-            return [s for s in chain(*await asyncio.gather(*[self.cache.descriptor(
-                SERVER_DESCRIPTOR,
-                digest=endpoint_assignments[assignment],
-                published_hint=status.valid_after,
-                endpoint=assignment)
-                for assignment in endpoint_assignments])) if s]
-        else:
-            return await self.cache.descriptor(
-                SERVER_DESCRIPTOR,
-                digest=referencing_endpoints.keys(),
-                published_hint=status.valid_after)
+            digests += [status_entry.digest for status_entry in status.routers.values()]
+        digests = list(set(digests))
+        return await self.cache.relay_server_descriptors(
+                digests, published_hint=status.valid_after)
 
     async def discover_extra_info_descriptors(self, server_descriptors):
-        return await asyncio.gather(*[self.cache.descriptor(
-            EXTRA_INFO_DESCRIPTOR,
-            desc.extra_info_digest)
-            for desc in server_descriptors])
+        return await self.cache.relay_extra_info_descriptors(
+            [desc.extra_info_digest
+            for desc in server_descriptors
+            if desc.extra_info_digest])
 
     async def _scrape(self, directory_cache_mode):
         if directory_cache_mode is DirectoryCacheMode.DIRECTORY_CACHE:
@@ -142,5 +126,8 @@ class DirectoryScraper:
 
 async def scrape(args):
     scraper = DirectoryScraper(args.archive_path)
-    await scraper.cache.downloader.consensus()
-    await scraper.scrape_as_client()
+    if args.client:
+        await scraper.cache.downloader.consensus()
+        await scraper.scrape_as_client()
+    else:
+        await scraper.scrape_as_directory_cache()
