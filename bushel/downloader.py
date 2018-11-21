@@ -9,6 +9,7 @@ from itertools import chain
 import stem
 from stem import DirPort
 from stem.descriptor.remote import MAX_FINGERPRINTS
+from stem.descriptor.remote import MAX_MICRODESCRIPTOR_HASHES
 from stem.descriptor.remote import DescriptorDownloader
 
 from bushel import DIRECTORY_AUTHORITIES
@@ -59,6 +60,24 @@ def relay_extra_info_descriptors_query_path(digests):
     :returns: Query path as a :py:class:`str`.
     """
     return "/tor/extra/d/" + "+".join(digests)
+
+def relay_microdescriptors_query_path(microdescriptor_hashes):
+    """
+    Generates a query path to request microdescriptors by their hashes
+    from a directory server.  For example:
+
+    >>> microdescriptor_hashes = ["Z62HG1C9PLIVs8jLi1guO48rzPdcq6tFTLi5s27Zy4U",
+    ...                           "FkiLuQJe/Gqp4xsHfheh+G42TSJ77AarHOGrjazj0Q0"]
+    >>> relay_microdescriptors_query_path(microdescriptor_hashes)  # doctest: +ELLIPSIS
+    '/tor/micro/d/Z62HG1C9PLIVs8jL...Li5s27Zy4U-FkiLuQJe/Gqp4xsHf...rjazj0Q0'
+
+    These query paths are defined in appendix B of [dir-spec]_.
+
+    :param list(str) digests: The base64-encoded hashes for the descriptors.
+
+    :returns: Query path as a :py:class:`str`.
+    """
+    return "/tor/micro/d/" + "-".join(microdescriptor_hashes)
 
 
 class DirectoryDownloader:
@@ -142,10 +161,11 @@ class DirectoryDownloader:
                     DirPort(router.address, router.dir_port))
         return directory_caches
 
-    async def _consensus_attempt(self, endpoint):
-        query = self.downloader.get_consensus(
+    async def _consensus_attempt(self, flavor, endpoint):
+        query = self.downloader.query(
+            f"/tor/status-vote/current/consensus-{flavor}",
             document_handler=stem.descriptor.DocumentHandler.DOCUMENT,  # pylint: disable=no-member
-            endpoints=[endpoint] if endpoint else self.directory_authorities())
+            endpoints=[endpoint])
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(
             None, functools.partial(query.run, suppress=True))
@@ -153,11 +173,11 @@ class DirectoryDownloader:
             self.current_consensus = consensus
             return consensus
 
-    async def consensus(self, endpoint=None):
-        endpoints = [endpoint] if endpoint else self.endpoints
+    async def relay_consensus(self, flavor="ns", valid_after=None, *, endpoint=None):
+        endpoints = self.endpoints.copy()
         random.shuffle(endpoints)
         for endpoint in endpoints:
-            consensus = await self._consensus_attempt(endpoint)
+            consensus = await self._consensus_attempt(flavor, endpoint)
             if consensus:
                 return consensus
 
@@ -196,15 +216,22 @@ class DirectoryDownloader:
                 result = await loop.run_in_executor(
                     None, functools.partial(query.run, suppress=True))
             for descriptor in result:
-                digests.remove(descriptor.digest())
+                try:
+                    digests.remove(descriptor.digest())
+                except ValueError:
+                    LOG.error("I was given a descriptor I didn't ask for! This "
+                              "likely indicated a bug in the server we used.")
                 descriptors.append(descriptor)
+        if digests:
+            LOG.warning("Downloader failed to find descriptors: %s.",
+                        query_path_function(digests))
         return descriptors
 
     async def relay_server_descriptors(self, digests, published_hint=None):
         """
         Retrieves multiple server descriptors from directory servers.
 
-        :param list(str) digest: Hex-encoded digests for the descriptors.
+        :param list(str) digests: Hex-encoded digests for the descriptors.
         :param ~datetime.datetime published_hint: Provides a hint on the
             published time. Currently this is unused, but is accepted for
             compatibility with other directory sources. In the future this may
@@ -224,9 +251,9 @@ class DirectoryDownloader:
 
     async def relay_extra_info_descriptors(self, digests, published_hint=None):
         """
-        Retrieves multiple server descriptors from directory servers.
+        Retrieves multiple extra-info descriptors from directory servers.
 
-        :param list(str) digest: Hex-encoded digests for the descriptors.
+        :param list(str) digests: Hex-encoded digests for the descriptors.
         :param ~datetime.datetime published_hint: Provides a hint on the
             published time. Currently this is unused, but is accepted for
             compatibility with other directory sources. In the future this may
@@ -234,7 +261,7 @@ class DirectoryDownloader:
             are long gone.
 
         :returns: A :py:class:`list` of
-                  :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.
+                  :py:class:`stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor`.
         """
         batches = chunks(digests, MAX_FINGERPRINTS)
         return list(
@@ -242,4 +269,26 @@ class DirectoryDownloader:
                 self._multiple_descriptors(
                     relay_extra_info_descriptors_query_path, batch,
                     self.extra_info_endpoints) for batch in batches
+            ])))
+
+    async def relay_microdescriptors(self, microdescriptor_hashes, valid_after_hint=None):
+        """
+        Retrieves multiple server descriptors from directory servers.
+
+        :param list(str) hashes: base64-encoded hashes for the microdescriptors.
+        :param ~datetime.datetime valid_after_hint: Provides a hint on the
+            valid_after time. Currently this is unused, but is accepted for
+            compatibility with other directory sources. In the future this may
+            be used to avoid attempts to download descriptors that it is likely
+            are long gone.
+
+        :returns: A :py:class:`list` of
+                  :py:class:`stem.descriptor.microdescriptor.Microdescriptor`.
+        """
+        batches = chunks(microdescriptor_hashes, MAX_MICRODESCRIPTOR_HASHES)
+        return list(
+            chain(*await asyncio.gather(*[
+                self._multiple_descriptors(relay_microdescriptors_query_path,
+                                           batch, self.endpoints)
+                for batch in batches
             ])))

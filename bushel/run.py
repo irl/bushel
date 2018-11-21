@@ -43,6 +43,7 @@ def main():
     logging.getLogger("bushel").setLevel(
         logging.DEBUG if args.verbose else logging.INFO
     )
+    logging.getLogger("stem").setLevel(logging.INFO)
     if vars(args).get("func"):
         args.func(args)
     elif vars(args).get("coro"):

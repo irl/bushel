@@ -25,10 +25,12 @@ class DirectoryScraper:
     def __init__(self, archive_path):
         self.cache = DirectoryCache(archive_path)
 
-    async def discover_consensus(self, next_consensus=True, endpoint=None):
+    async def discover_consensus(self, flavor="ns", *, next_consensus=True,
+                                 endpoint=None):
         """
-        Fetches either the current or next consensus.
+        Fetches either the current or next consensus of a given flavor.
 
+        :param str flavor: The flavor of consensus to retrieve.
         :param bool next_vote: If *True*, the next vote will be fetched instead
                                of the current vote.
 
@@ -37,7 +39,7 @@ class DirectoryScraper:
                   for the requested consensus.
         """
         # TODO: Add support for next and endpoint
-        return await self.cache.consensus()
+        return await self.cache.consensus(flavor)
 
     async def _discover_votes_from_status(self, status):
         votes = []
@@ -90,7 +92,8 @@ class DirectoryScraper:
         """
         digests = []
         for status in statuses:
-            digests += [status_entry.digest for status_entry in status.routers.values()]
+            if not status.is_microdescriptor:
+                digests += [status_entry.digest for status_entry in status.routers.values()]
         digests = list(set(digests))
         return await self.cache.relay_server_descriptors(
                 digests, published_hint=status.valid_after)
@@ -101,6 +104,17 @@ class DirectoryScraper:
             for desc in server_descriptors
             if desc.extra_info_digest])
 
+    async def discover_microdescriptors(self, statuses):
+        microdescriptors = []
+        for status in statuses:
+            if status.is_microdescriptor:
+                microdescriptors += await self.cache.relay_microdescriptors([
+                    status_entry.microdescriptor_digest
+                    for status_entry in status.routers.values()
+                    if status_entry.microdescriptor_digest
+                ])
+        return microdescriptors
+
     async def _scrape(self, directory_cache_mode):
         if directory_cache_mode is DirectoryCacheMode.DIRECTORY_CACHE:
             self.cache.set_mode(DirectoryCacheMode.DIRECTORY_CACHE)
@@ -110,11 +124,14 @@ class DirectoryScraper:
         statuses = await self.discover_votes()
         consensus = await self.discover_consensus()
         statuses.append(consensus)
+        consensus = await self.discover_consensus("microdesc")
+        statuses.append(consensus)
         statuses += await self.discover_votes(consensus)
         server_descriptors = await self.discover_server_descriptors(
             statuses,
             endpoint_preference=directory_cache_mode is
             DirectoryCacheMode.DIRECTORY_CACHE)
+        microdescriptors = await self.discover_microdescriptors(statuses)
         extra_info_descriptors = await self.discover_extra_info_descriptors(
             server_descriptors)
 
@@ -127,7 +144,7 @@ class DirectoryScraper:
 async def scrape(args):
     scraper = DirectoryScraper(args.archive_path)
     if args.client:
-        await scraper.cache.downloader.consensus()
+        await scraper.cache.downloader.relay_consensus()
         await scraper.scrape_as_client()
     else:
         await scraper.scrape_as_directory_cache()

@@ -47,6 +47,7 @@ methods, with the actual I/O performed in an executor.
   ======================= ===========
 """
 import asyncio
+import base64
 import datetime
 import functools
 import glob
@@ -61,10 +62,11 @@ import aiofiles
 import stem.util.str_tools
 from stem.descriptor import parse_file as stem_parse_file
 from stem.descriptor import DocumentHandler
-from stem.descriptor.server_descriptor import RelayDescriptor
-from stem.descriptor.server_descriptor import BridgeDescriptor
 from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
 from stem.descriptor.extrainfo_descriptor import BridgeExtraInfoDescriptor
+from stem.descriptor.microdescriptor import Microdescriptor
+from stem.descriptor.server_descriptor import RelayDescriptor
+from stem.descriptor.server_descriptor import BridgeDescriptor
 from stem.descriptor.networkstatus import NetworkStatusDocumentV3
 from stem.util import enum
 
@@ -81,6 +83,7 @@ CollectorOutSubdirectory = enum.Enum(  # pylint: disable=invalid-name
 CollectorOutRelayDescsMarker = enum.Enum(  # pylint: disable=invalid-name
     ('CONSENSUS', 'consensus'),
     ('EXTRA_INFO', 'extra-info'),
+    ('MICRODESC', 'microdesc'),
     ('SERVER_DESCRIPTOR', 'server-descriptor'),
     ('VOTE', 'vote'),
 )
@@ -196,6 +199,25 @@ def collector_433_filename(valid_after, v3ident, digest):
             f"{v3ident}-{digest}")
 
 
+def collector_434_filename(valid_after):
+    """
+    Create a filename for a microdesc-flavoured network status consensus
+    according to §4.3.4 of the [collector-protocol]_. For example:
+
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
+    >>> collector_434_filename(valid_after)
+    '2018-11-19-15-00-00-consensus-microdesc'
+
+    :param ~datetime.datetime valid_after: The valid-after time.
+
+    :returns: Filename as a :py:class:`str`.
+    """
+    return (f"{valid_after.year}-{valid_after.month:02d}-"
+            f"{valid_after.day:02d}-{valid_after.hour:02d}-"
+            f"{valid_after.minute:02d}-{valid_after.second:02d}-consensus-"
+            "microdesc")
+
+
 def collector_521_substructure(published, digest):
     """
     Create a path substructure according to §5.2.1 of the
@@ -284,8 +306,8 @@ def collector_522_substructure(valid_after):
 def collector_522_path(subdirectory, marker, valid_after, filename):
     """
     Create a path according to §5.2.2 of the [collector-protocol]_. This is
-    used for bridge statuses, and network-status consensuses and votes. For
-    a bridge status for example:
+    used for bridge statuses, and network-status consensuses (both ns- and
+    microdesc- flavors) and votes. For a bridge status for example:
 
     >>> subdirectory = CollectorOutSubdirectory.BRIDGE_DESCRIPTORS
     >>> marker = CollectorOutBridgeDescsMarker.STATUSES
@@ -324,24 +346,60 @@ def collector_522_path(subdirectory, marker, valid_after, filename):
                         collector_522_substructure(valid_after), filename)
 
 
-def _type_annotation_for(descriptor):
-    # This functionality is now implemented in stem, just keeping it around
-    # here until it lands in a release.
-    # https://trac.torproject.org/projects/tor/ticket/28397
-    annotations = {
-        RelayDescriptor: b"server-descriptor 1.0",
-        RelayExtraInfoDescriptor: b"extra-info 1.0",
-    }
-    # stem uses the same class for both consensus and votes so we need
-    # to have special logic for that
-    if isinstance(descriptor, NetworkStatusDocumentV3):
-        if descriptor.is_consensus:
-            return b"network-status-consensus-3 1.0"
-        if descriptor.is_vote:
-            return b"network-status-vote-3 1.0"
-        raise RuntimeError(
-            "It's a network status but not a consensus or vote?")
-    return annotations.get(type(descriptor), None)
+def collector_533_substructure(valid_after):
+    """
+    Create a substructure according to §5.3.3 of the [collector-protocol]_.
+    This is used for microdesc-flavored consensuses and microdescriptors. For
+    example:
+
+    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> collector_533_substructure(valid_after)
+    '2018/11'
+    """
+    return os.path.join(f"{valid_after.year}", f"{valid_after.month:02d}")
+
+def collector_534_consensus_path(valid_after):
+    """
+    Create a path according to §5.3.4 of the [collector-protocol]_ for a
+    microdesc-flavored consensus. For example:
+
+    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> collector_534_consensus_path(valid_after)
+    'relay-descriptors/microdesc/2018/11/consensus-microdesc/19/2018-11-19-15-00-00-consensus-microdesc'
+    """
+    return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS,
+                        CollectorOutRelayDescsMarker.MICRODESC,
+                        collector_533_substructure(valid_after),
+                        "consensus-microdesc",
+                        f"{valid_after.day:02d}",
+                        collector_434_filename(valid_after))
+
+def collector_534_microdescriptor_path(valid_after, digest):
+    """
+    Create a path according to §5.3.4 of the [collector-protocol]_ for a
+    microdescriptor. For example:
+
+    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> digest = "00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f"
+    >>> collector_534_microdescriptor_path(valid_after, digest)
+    'relay-descriptors/microdesc/2018/11/micro/0/0/00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f'
+
+    This path in the Collector File Structure Protocol using this substructure
+    expect *lower-case* hex-encoded SHA-256 digests.
+
+    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> digest = "00D91CF96321FBD536DD07E297A5E1B7E6961DDD10FACDD719716E351453168F"
+    >>> collector_534_microdescriptor_path(valid_after, digest)
+    'relay-descriptors/microdesc/2018/11/micro/0/0/00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f'
+    """
+    digest = digest.lower()
+    return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS,
+                        CollectorOutRelayDescsMarker.MICRODESC,
+                        collector_533_substructure(valid_after),
+                        "micro",
+                        f"{digest[0]}",
+                        f"{digest[1]}",
+                        f"{digest}")
 
 
 def prepare_annotated_content(descriptor):
@@ -354,10 +412,8 @@ def prepare_annotated_content(descriptor):
     :returns: :py:class:`bytes` for the annotated descriptor.
     """
     content = descriptor.get_bytes()
-    type_annotation = _type_annotation_for(descriptor)
-    if type_annotation is not None:
-        return b"@type " + type_annotation + b"\r\n" + content
-    return content
+    type_annotation = descriptor.type_annotation()
+    return str(type_annotation).encode('utf-8') + b"\r\n" + content
 
 
 def valid_after_now():
@@ -433,9 +489,17 @@ class DirectoryArchive:
         elif isinstance(descriptor, RelayExtraInfoDescriptor):
             fpath = self.relay_extra_info_descriptor_path(
                 descriptor.published, descriptor.digest())
+        elif isinstance(descriptor, Microdescriptor):
+            # TODO: With better annotations support in stem we can keep the
+            # metadata around for the valid_after date.
+            fpath = self.relay_microdescriptor_path(valid_after_now(),
+                                                    descriptor.digest())
         elif isinstance(descriptor, NetworkStatusDocumentV3) and \
               descriptor.is_consensus:
-            fpath = self.relay_consensus_path(descriptor.valid_after)
+            if descriptor.is_microdescriptor:
+                fpath = self.relay_microdescriptor_consensus_path(descriptor.valid_after)
+            else:
+                fpath = self.relay_consensus_path(descriptor.valid_after)
         elif isinstance(descriptor, NetworkStatusDocumentV3) and \
               descriptor.is_vote:
             # TODO: The digest functionality should be appearing in stem.
@@ -588,6 +652,17 @@ class DirectoryArchive:
                 published,
                 digest))
 
+    def relay_microdescriptor_path(self, valid_after, digest):
+        digest_bytes = digest.encode('utf-8')
+        digest_bytes += b'=' * (len(digest_bytes) % 3)
+        digest = base64.decodebytes(digest_bytes).hex()
+        return self.path_for(
+            collector_534_microdescriptor_path(valid_after, digest))
+
+    def relay_microdescriptor_consensus_path(self, valid_after):
+        return self.path_for(
+            collector_534_consensus_path(valid_after))
+
     def relay_consensus_path(self, valid_after):
         """
         Generates a path, including the archive path, for a network-status
@@ -675,6 +750,11 @@ class DirectoryArchive:
             return await parse_file(
                 path, descriptor_type="server-descriptor 1.0")
 
+    async def _multiple_descriptors(self, single_descriptor_function, digests, published_hint):
+        return [descriptor for descriptor in await asyncio.gather(*[
+            single_descriptor_function(digest, published_hint) for digest in digests
+        ]) if descriptor]
+
     async def relay_server_descriptors(self, digests, published_hint):
         """
         Retrieves multiple server descriptors published around the same time
@@ -689,10 +769,43 @@ class DirectoryArchive:
         :returns: A :py:class:`list` of
                   :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.
         """
-        return [descriptor for descriptor in await asyncio.gather(*[
-            self.relay_server_descriptor(digest, published_hint)
-            for digest in digests
-        ]) if descriptor]
+        return await self._multiple_descriptors(self.relay_server_descriptor, digests, published_hint)
+
+    async def relay_microdescriptor(self, digest, valid_after_hint):
+        """
+        Retrieves a relay's microdescriptor from the archive.
+
+        :param str digest: A hex-encoded digest of the descriptor.
+        :param ~datetime.datetime valid_after_hint: Provides a hint on the
+            valid_after time to allow the descriptor to be found in the archive.
+            If the descriptor did not become valid in the same month as this,
+            it will not be found.
+
+        :returns: A :py:class:`stem.descriptor.microdescriptor.Microdescriptor`
+                  if found, otherwise *None*.
+        """
+        valid_after_hint = valid_after_hint or valid_after_now()
+        path = self.relay_microdescriptor_path(valid_after_hint, digest)
+        async with self.max_file_concurrency_lock:
+            return await parse_file(
+                path, descriptor_type="microdescriptor 1.0")
+
+    async def relay_microdescriptors(self, digests, valid_after_hint):
+        """
+        Retrieves multiple microdescriptors around the same valid_after time
+        (e.g. all referenced by the same microdescriptor consensus).
+
+        :param list(str) digest: Hex-encoded digests for the descriptors.
+
+        :param ~datetime.datetime valid_after_hint: Provides a hint on the
+            valid_after time to allow the descriptor to be found in the archive.
+            If the descriptor did not become valid in the same month as this,
+            it will not be found.
+
+        :returns: A :py:class:`list` of
+                  :py:class:`stem.descriptor.microdescriptor.Microdescriptor`.
+        """
+        return await self._multiple_descriptors(self.relay_microdescriptor, digests, valid_after_hint)
 
     async def relay_extra_info_descriptor(self, digest, published_hint):
         """
@@ -726,10 +839,7 @@ class DirectoryArchive:
         :returns: A :py:class:`list` of
                   :py:class:`stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor`.
         """
-        return [descriptor for descriptor in await asyncio.gather(*[
-            self.relay_extra_info_descriptor(digest, published_hint)
-            for digest in digests
-        ]) if descriptor]
+        return await self._multiple_descriptors(self.relay_extra_info_descriptor, digests, published_hint)
 
     async def relay_vote(self, v3ident, digest="*", valid_after=None):
         """
@@ -757,7 +867,7 @@ class DirectoryArchive:
             return await parse_file(
                 path, descriptor_type="network-status-vote-3 1.0")
 
-    async def relay_consensus(self, valid_after=None):
+    async def relay_consensus(self, flavor="ns", valid_after=None):
         """
         Retrieves a consensus from the archive.
 
@@ -770,8 +880,9 @@ class DirectoryArchive:
                   if found, otherwise *None*.
         """
         valid_after = valid_after or valid_after_now()
-        path = self.relay_consensus_path(valid_after)
-        print(path)
+        if flavor == "microdesc":
+            path = self.relay_microdescriptor_consensus_path(valid_after)
+        else: # probably we want "ns"
+            path = self.relay_consensus_path(valid_after)
         async with self.max_file_concurrency_lock:
-            return await parse_file(
-                path, descriptor_type="network-status-consensus-3 1.0")
+            return await parse_file(path)

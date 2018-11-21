@@ -15,6 +15,8 @@ from bushel.downloader import DirectoryDownloader
 
 LOG = logging.getLogger('')
 
+MICRODESCRIPTOR = 30
+
 class DirectoryCache:
     def __init__(self, archive_path):
         self.descriptors = defaultdict(dict)
@@ -25,7 +27,7 @@ class DirectoryCache:
     def set_mode(self, directory_cache_mode):
         self.downloader.set_mode(directory_cache_mode)
 
-    async def consensus(self, valid_after=None):
+    async def consensus(self, flavor="ns", valid_after=None):
         """
         Returns the consensus with the specified valid_after time if available
         from the archive or a directory server.
@@ -34,9 +36,9 @@ class DirectoryCache:
                                      consensus. If *None* then the latest
                                      consensus will be retrieved.
         """
-        consensus = await self.archive.relay_consensus(valid_after)
+        consensus = await self.archive.relay_consensus(flavor, valid_after)
         if not consensus:
-            consensus = await self.downloader.consensus()
+            consensus = await self.downloader.relay_consensus(flavor, valid_after)
             if consensus:
                 await self.archive.store(consensus)
         return consensus
@@ -103,4 +105,29 @@ class DirectoryCache:
                     await self.archive.store(descriptor)
         for descriptor in descriptors:
             self.descriptors[EXTRA_INFO_DESCRIPTOR][digest] = descriptor
+        return descriptors
+
+    async def relay_microdescriptors(self, microdescriptor_hashes, valid_after_hint=None):
+        descriptors = []
+        for digest in microdescriptor_hashes:
+            descriptor = self._cached_descriptor(MICRODESCRIPTOR, digest)
+            if descriptor:
+                descriptors.append(descriptor)
+                microdescriptor_hashes.remove(descriptor.digest())
+        if not microdescriptor_hashes:
+            return descriptors
+        archived_descriptors = await self.archive.relay_microdescriptors(
+            microdescriptor_hashes, valid_after_hint=valid_after_hint)
+        for descriptor in archived_descriptors:
+            microdescriptor_hashes.remove(descriptor.digest())
+        descriptors += archived_descriptors
+        if microdescriptor_hashes:
+            downloaded_descriptors = await self.downloader.relay_microdescriptors(
+                microdescriptor_hashes, valid_after_hint=valid_after_hint)
+            if downloaded_descriptors:
+                descriptors += downloaded_descriptors
+                for descriptor in downloaded_descriptors:
+                    await self.archive.store(descriptor)
+        for descriptor in descriptors:
+            self.descriptors[MICRODESCRIPTOR][digest] = descriptor
         return descriptors

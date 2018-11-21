@@ -31,6 +31,6 @@ class TestDirectoryDownloader:
             raise nose.SkipTest(
                 f"No local directory cache available at {LOCAL_DIRECTORY_CACHE}")
         async def go(self):
-            consensus = await self.downloader.consensus()
+            consensus = await self.downloader.relay_consensus(flavor="ns")
             assert isinstance(consensus, NetworkStatusDocumentV3)
         asyncio.run(go(self))
