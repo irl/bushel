@@ -20,9 +20,25 @@ Requirements
 ------------
 
 * Python 3.7+ (no really, we're using some new asyncio features)
-* [stem](https://stem.torproject.org) 1.7.0+
+* [stem](https://stem.torproject.org) 1.8.0+ (master will do for now, because 1.8.0 isn't released)
 * [aiofiles](https://github.com/Tinche/aiofiles)
 * [nose](https://nose.readthedocs.io/en/latest/)
+
+Getting Started
+---------------
+
+On Debian systems:
+
+```
+sudo apt install python3.7 python3-virtualenv git
+mkdir -p ~/bushel/out
+cd ~/bushel
+python3.7 -m virtualenv -p /usr/bin/python3.7 .
+git clone https://github.com/irl/bushel.git src
+. bin/activate
+cd src && pip install -r requirements.txt && python setup.py install
+cd ~/bushel/out && bushel scrape
+```
 
 Test Requirements
 -----------------
