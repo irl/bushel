@@ -81,7 +81,6 @@ class DirectoryArchiveScrubber:
             digest,
             published_hint=valid_after)
         if server:
-            print(repr(server))
             stats["server_descriptor"] += 1
             LOG.debug(f"Successfully loaded server descriptor for {server.fingerprint}.")
             if server.get_unrecognized_lines():
