@@ -40,14 +40,24 @@ cd src && pip install -r requirements.txt && python setup.py install
 cd ~/bushel/out && bushel scrape
 ```
 
-Test Requirements
------------------
+Unit Tests
+----------
 
-The tests expect a local directory cache to be running at `127.0.0.1:9030`.
-It should be configured with the following `torrc` options:
+Some unit tests expect a local directory cache to be running at
+`127.0.0.1:9030`.  It should be configured with the following `torrc` options:
 
 ```
 DirPort 9030
 UseMicrodescriptors 0
 DownloadExtraInfo 1
+```
+
+If you have not configured this, the tests will not fail, they will just be
+skipped. This is not required for normal operation. *We expect this requirement
+to go away once we have a mock Directory Server to test against.*
+
+The tests can be run with:
+
+```
+python3.7 -m nose --with-doctest
 ```
