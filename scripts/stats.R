@@ -39,7 +39,7 @@ plot_directory_servers <- function() {
     ggplot(aes(x = valid_after, y = value, color = variable)) +
     geom_line() +
     scale_x_datetime(name = "Consensus valid-after Time") +
-    scale_y_log10(name = "Servers", breaks = c(50, 100, 200, 500, 1000, 2000, 5000)) +
+    scale_y_log10(name = "Servers (log scale)", breaks = c(50, 100, 200, 500, 1000, 2000, 5000)) +
     scale_colour_hue("", breaks = c("adjusted_directory_cache", "adjusted_directory_cache_dir_port", "adjusted_extra_info_cache", "adjusted_extra_info_cache_dir_port"),
         labels = c("All", "... with DirPort", "Extra-info cache", "... with DirPort")) +
     ggtitle("Directory servers seen in network status consensuses") +
