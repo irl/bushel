@@ -32,13 +32,17 @@ def relay_server_descriptors_query_path(digests):
     >>> relay_server_descriptors_query_path(digests)  # doctest: +ELLIPSIS
     '/tor/server/d/A94A07B201598D847105...24389+B3897498732339479587...95A8'
 
-    These query paths are defined in appendix B of [dir-spec]_.
+    These query paths are defined in appendix B of [dir-spec]_. By convention,
+    these URLs use upper-case hex-encoded SHA-1 digests and so this function
+    will ensure that digests are upper-case. Directory server implementations
+    should not rely on this behaviour.
 
     :param list(str) digests: The hex-encoded SHA-1 digests for the
                               descriptors.
 
     :returns: Query path as a :py:class:`str`.
     """
+    digests = [d.upper() for d in digests]
     return "/tor/server/d/" + "+".join(digests)
 
 
@@ -52,13 +56,17 @@ def relay_extra_info_descriptors_query_path(digests):
     >>> relay_extra_info_descriptors_query_path(digests)  # doctest: +ELLIPSIS
     '/tor/extra/d/A94A07B201598D847105...24389+B3897498732339479587...95A8'
 
-    These query paths are defined in appendix B of [dir-spec]_.
+    These query paths are defined in appendix B of [dir-spec]_. By convention,
+    these URLs use upper-case hex-encoded SHA-1 digests and so this function
+    will ensure that digests are upper-case. Directory server implementations
+    should not rely on this behaviour.
 
     :param list(str) digests: The hex-encoded SHA-1 digests for the
                               descriptors.
 
     :returns: Query path as a :py:class:`str`.
     """
+    digests = [d.upper() for d in digests]
     return "/tor/extra/d/" + "+".join(digests)
 
 def relay_microdescriptors_query_path(microdescriptor_hashes):
@@ -122,7 +130,8 @@ class DirectoryDownloader:
             self.endpoints = self.directory_caches()
             self.extra_info_endpoints = self.directory_caches(extra_info=True)
         elif directory_cache_mode == DirectoryCacheMode.TESTING:
-            self.endpoints = [LOCAL_DIRECTORY_CACHE]
+            self.endpoints = \
+                self.extra_info_endpoints = [LOCAL_DIRECTORY_CACHE]
         # TODO: Error if we don't know what mode it is
 
     def directory_authorities(self):
