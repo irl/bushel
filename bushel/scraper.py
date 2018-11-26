@@ -116,11 +116,7 @@ class DirectoryScraper:
         return microdescriptors
 
     async def _scrape(self, directory_cache_mode):
-        if directory_cache_mode is DirectoryCacheMode.DIRECTORY_CACHE:
-            self.cache.set_mode(DirectoryCacheMode.DIRECTORY_CACHE)
-        else:
-            self.cache.set_mode(DirectoryCacheMode.CLIENT)
-        # TODO: Check for unrecognised modes
+        self.cache.set_mode(directory_cache_mode)
         statuses = await self.discover_votes()
         consensus = await self.discover_consensus()
         statuses.append(consensus)
