@@ -100,7 +100,7 @@ async def parse_file(path, **kwargs):
     Parses a descriptor from a file.
 
     :param content str/bytes: String to construct the descriptor from
-    :param **kwargs dict: Additional arguments for
+    :param kwargs dict: Additional arguments for
                           :meth:`stem.descriptor.Descriptor.parse_file`.
     :returns: :class:`stem.descriptor.Descriptor` subclass for the given
               content, or a *list* of descriptors if **multiple=True** is
