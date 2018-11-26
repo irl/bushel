@@ -2,6 +2,7 @@ import asyncio
 import urllib.error
 import nose
 from nose.tools import assert_equal
+from nose.tools import assert_raises
 
 from stem.descriptor import DocumentHandler
 from stem.descriptor.remote import get_consensus
@@ -11,6 +12,7 @@ from bushel import DIRECTORY_AUTHORITIES
 from bushel import LOCAL_DIRECTORY_CACHE
 from bushel.downloader import DirectoryCacheMode
 from bushel.downloader import DirectoryDownloader
+from bushel.downloader import UnknownDirectoryCacheModeError
 from bushel.downloader import relay_server_descriptors_query_path
 from bushel.downloader import relay_extra_info_descriptors_query_path
 from bushel.downloader import relay_microdescriptors_query_path
@@ -84,6 +86,13 @@ class TestLiveDirectoryDownloader:
         assert authorities <= extra_info_endpoints
         assert extra_info_endpoints <= endpoints
 
+    def test_mode_integer(self):
+        with assert_raises(TypeError):
+            self.downloader.set_mode(1)
+
+    def test_mode_unknown(self):
+        with assert_raises(UnknownDirectoryCacheModeError):
+            self.downloader.set_mode("unknown")
 
 def test_relay_server_descriptors_query_path():
     expected = [

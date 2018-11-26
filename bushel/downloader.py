@@ -123,6 +123,8 @@ class DirectoryDownloader:
         self.descriptor_cache = None
 
     def set_mode(self, directory_cache_mode):
+        if not isinstance(directory_cache_mode, str):
+            raise TypeError()
         if directory_cache_mode == DirectoryCacheMode.DIRECTORY_CACHE:
             self.endpoints = \
                 self.extra_info_endpoints = self.directory_authorities()
@@ -132,7 +134,8 @@ class DirectoryDownloader:
         elif directory_cache_mode == DirectoryCacheMode.TESTING:
             self.endpoints = \
                 self.extra_info_endpoints = [LOCAL_DIRECTORY_CACHE]
-        # TODO: Error if we don't know what mode it is
+        else:
+            raise UnknownDirectoryCacheModeError(directory_cache_mode)
 
     def directory_authorities(self):
         """
@@ -301,3 +304,19 @@ class DirectoryDownloader:
                                            batch, self.endpoints)
                 for batch in batches
             ])))
+
+
+class UnknownDirectoryCacheModeError(ValueError):
+    """
+    Exception raised when attempting to set an unknown mode for a
+    :py:class:`DirectoryDownloader`.
+
+    :param str unknown_mode: The unknown mode requested.
+
+    :var str unknown_mode: The unknown mode requested.
+    """
+    def __init__(self, unknown_mode):
+        self.unknown_mode = unknown_mode
+
+    def __str__(self):
+        return self.unknown_mode
