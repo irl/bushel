@@ -29,6 +29,7 @@ class TestLiveDirectoryDownloader:
                 initial_consensus=consensus[0])
         except urllib.error.URLError:
             self.has_local_directory_cache = False
+            self.downloader = DirectoryDownloader()
 
     def test_fetch_consensus(self):
         self.downloader.set_mode(DirectoryCacheMode.TESTING)  # pylint: disable=no-member
