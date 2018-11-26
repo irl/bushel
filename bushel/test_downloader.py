@@ -10,7 +10,7 @@ from stem.descriptor.networkstatus import NetworkStatusDocumentV3
 
 from bushel import DIRECTORY_AUTHORITIES
 from bushel import LOCAL_DIRECTORY_CACHE
-from bushel.downloader import DirectoryCacheMode
+from bushel import DirectoryCacheMode
 from bushel.downloader import DirectoryDownloader
 from bushel.downloader import UnknownDirectoryCacheModeError
 from bushel.downloader import relay_server_descriptors_query_path
