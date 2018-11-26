@@ -60,7 +60,7 @@ import os.path
 import aiofiles
 
 import stem.util.str_tools
-from stem.descriptor import parse_file as stem_parse_file
+from stem.descriptor import Descriptor
 from stem.descriptor import DocumentHandler
 from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
 from stem.descriptor.extrainfo_descriptor import BridgeExtraInfoDescriptor
@@ -97,19 +97,26 @@ CollectorOutBridgeDescsMarker = enum.Enum(  # pylint: disable=invalid-name
 
 async def parse_file(path, **kwargs):
     """
-    :py:mod:`asyncio` wrapper for :py:func:`stem.descriptor.parse_file`.
+    Parses a descriptor from a file.
+
+    :param content str/bytes: String to construct the descriptor from
+    :param **kwargs dict: Additional arguments for
+                          :meth:`stem.descriptor.Descriptor.parse_file`.
+    :returns: :class:`stem.descriptor.Descriptor` subclass for the given
+              content, or a *list* of descriptors if **multiple=True** is
+              provided.
     """
     loop = asyncio.get_running_loop()
     try:
         async with aiofiles.open(path, 'rb') as source:
             raw_content = await source.read()
-            return next(await loop.run_in_executor(
+            return await loop.run_in_executor(
                 None,
                 functools.partial(
-                    stem_parse_file,
-                    io.BytesIO(raw_content),
+                    Descriptor.from_str,
+                    raw_content,
                     document_handler=DocumentHandler.DOCUMENT,  # pylint: disable=no-member
-                    **kwargs)))
+                    **kwargs))
     except FileNotFoundError:
         pass
     except StopIteration:
