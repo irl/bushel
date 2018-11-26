@@ -149,6 +149,7 @@ def collector_422_filename(valid_after, fingerprint):
 
     :returns: Filename as a :py:class:`str`.
     """
+    fingerprint = fingerprint.upper()
     return (f"{valid_after.year}{valid_after.month:02d}"
             f"{valid_after.day:02d}-{valid_after.hour:02d}"
             f"{valid_after.minute:02d}{valid_after.second:02d}"
@@ -231,7 +232,7 @@ def collector_521_substructure(published, digest):
     [collector-protocol]_. This is used for server-descriptors and extra-info
     descriptors for both relays and bridges. For example:
 
-    >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
+    >>> published = datetime.datetime(2018, 11, 19, 9, 17, 56)
     >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
     >>> collector_521_substructure(published, digest)
     '2018/11/a/9'
@@ -262,7 +263,7 @@ def collector_521_path(subdirectory, marker, published, digest):
 
     >>> subdirectory = CollectorOutSubdirectory.RELAY_DESCRIPTORS
     >>> marker = CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR
-    >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
+    >>> published = datetime.datetime(2018, 11, 19, 9, 17, 56)
     >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
     >>> collector_521_path(subdirectory, marker, published, digest)  # doctest: +ELLIPSIS
     'relay-descriptors/server-descriptor/2018/11/a/9/a94a...389'
@@ -318,7 +319,7 @@ def collector_522_path(subdirectory, marker, valid_after, filename):
 
     >>> subdirectory = CollectorOutSubdirectory.BRIDGE_DESCRIPTORS
     >>> marker = CollectorOutBridgeDescsMarker.STATUSES
-    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
     >>> fingerprint = "BA44A889E64B93FAA2B114E02C2A279A8555C533" # Serge
     >>> filename = collector_422_filename(valid_after, fingerprint)
     >>> collector_522_path(subdirectory, marker, valid_after, filename)  # doctest: +ELLIPSIS
@@ -328,7 +329,7 @@ def collector_522_path(subdirectory, marker, valid_after, filename):
 
     >>> subdirectory = CollectorOutSubdirectory.RELAY_DESCRIPTORS
     >>> marker = CollectorOutRelayDescsMarker.CONSENSUS
-    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
     >>> filename = collector_431_filename(valid_after)
     >>> collector_522_path(subdirectory, marker, valid_after, filename)
     'relay-descriptors/consensus/2018/11/19/2018-11-19-15-00-00-consensus'
@@ -359,34 +360,35 @@ def collector_533_substructure(valid_after):
     This is used for microdesc-flavored consensuses and microdescriptors. For
     example:
 
-    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
     >>> collector_533_substructure(valid_after)
     '2018/11'
     """
     return os.path.join(f"{valid_after.year}", f"{valid_after.month:02d}")
 
+
 def collector_534_consensus_path(valid_after):
     """
     Create a path according to §5.3.4 of the [collector-protocol]_ for a
-    microdesc-flavored consensus. For example:
+    **microdesc-flavored** consensus. For example:
 
-    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
     >>> collector_534_consensus_path(valid_after)
     'relay-descriptors/microdesc/2018/11/consensus-microdesc/19/2018-11-19-15-00-00-consensus-microdesc'
     """
     return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS,
                         CollectorOutRelayDescsMarker.MICRODESC,
                         collector_533_substructure(valid_after),
-                        "consensus-microdesc",
-                        f"{valid_after.day:02d}",
+                        "consensus-microdesc", f"{valid_after.day:02d}",
                         collector_434_filename(valid_after))
+
 
 def collector_534_microdescriptor_path(valid_after, digest):
     """
     Create a path according to §5.3.4 of the [collector-protocol]_ for a
     microdescriptor. For example:
 
-    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
     >>> digest = "00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f"
     >>> collector_534_microdescriptor_path(valid_after, digest)
     'relay-descriptors/microdesc/2018/11/micro/0/0/00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f'
@@ -394,7 +396,7 @@ def collector_534_microdescriptor_path(valid_after, digest):
     This path in the Collector File Structure Protocol using this substructure
     expect *lower-case* hex-encoded SHA-256 digests.
 
-    >>> valid_after = datetime.datetime(2018, 11,19, 15)
+    >>> valid_after = datetime.datetime(2018, 11, 19, 15)
     >>> digest = "00D91CF96321FBD536DD07E297A5E1B7E6961DDD10FACDD719716E351453168F"
     >>> collector_534_microdescriptor_path(valid_after, digest)
     'relay-descriptors/microdesc/2018/11/micro/0/0/00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f'
@@ -402,11 +404,8 @@ def collector_534_microdescriptor_path(valid_after, digest):
     digest = digest.lower()
     return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS,
                         CollectorOutRelayDescsMarker.MICRODESC,
-                        collector_533_substructure(valid_after),
-                        "micro",
-                        f"{digest[0]}",
-                        f"{digest[1]}",
-                        f"{digest}")
+                        collector_533_substructure(valid_after), "micro",
+                        f"{digest[0]}", f"{digest[1]}", f"{digest}")
 
 
 def prepare_annotated_content(descriptor):
@@ -420,7 +419,7 @@ def prepare_annotated_content(descriptor):
     """
     content = descriptor.get_bytes()
     type_annotation = descriptor.type_annotation()
-    return str(type_annotation).encode('utf-8') + b"\r\n" + content
+    return str(type_annotation).encode('utf-8') + b"\n" + content
 
 
 def valid_after_now():
@@ -504,7 +503,8 @@ class DirectoryArchive:
         elif isinstance(descriptor, NetworkStatusDocumentV3) and \
               descriptor.is_consensus:
             if descriptor.is_microdescriptor:
-                fpath = self.relay_microdescriptor_consensus_path(descriptor.valid_after)
+                fpath = self.relay_microdescriptor_consensus_path(
+                    descriptor.valid_after)
             else:
                 fpath = self.relay_consensus_path(descriptor.valid_after)
         elif isinstance(descriptor, NetworkStatusDocumentV3) and \
@@ -560,7 +560,7 @@ class DirectoryArchive:
         descriptor with a given published time and digest. For example:
 
         >>> archive = DirectoryArchive("/srv/archive")
-        >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
+        >>> published = datetime.datetime(2018, 11, 19, 9, 17, 56)
         >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
         >>> archive.bridge_extra_info_descriptor_path(published, digest)  # doctest: +ELLIPSIS
         '/srv/archive/bridge-descriptors/extra-info/2018/11/a/9/a94a...389'
@@ -639,7 +639,7 @@ class DirectoryArchive:
         descriptor with a given published time and digest. For example:
 
         >>> archive = DirectoryArchive("/srv/archive")
-        >>> published = datetime.datetime(2018, 11,19, 9, 17, 56)
+        >>> published = datetime.datetime(2018, 11, 19, 9, 17, 56)
         >>> digest = "a94a07b201598d847105ae5fcd5bc3ab10124389"
         >>> archive.relay_extra_info_descriptor_path(published, digest)  # doctest: +ELLIPSIS
         '/srv/archive/relay-descriptors/extra-info/2018/11/a/9/a94a...389'
@@ -667,8 +667,7 @@ class DirectoryArchive:
             collector_534_microdescriptor_path(valid_after, digest))
 
     def relay_microdescriptor_consensus_path(self, valid_after):
-        return self.path_for(
-            collector_534_consensus_path(valid_after))
+        return self.path_for(collector_534_consensus_path(valid_after))
 
     def relay_consensus_path(self, valid_after):
         """
@@ -757,10 +756,14 @@ class DirectoryArchive:
             return await parse_file(
                 path, descriptor_type="server-descriptor 1.0")
 
-    async def _multiple_descriptors(self, single_descriptor_function, digests, published_hint):
-        return [descriptor for descriptor in await asyncio.gather(*[
-            single_descriptor_function(digest, published_hint) for digest in digests
-        ]) if descriptor]
+    async def _multiple_descriptors(self, single_descriptor_function, digests,
+                                    published_hint):
+        return [
+            descriptor for descriptor in await asyncio.gather(*[
+                single_descriptor_function(digest, published_hint)
+                for digest in digests
+            ]) if descriptor
+        ]
 
     async def relay_server_descriptors(self, digests, published_hint):
         """
@@ -776,7 +779,8 @@ class DirectoryArchive:
         :returns: A :py:class:`list` of
                   :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.
         """
-        return await self._multiple_descriptors(self.relay_server_descriptor, digests, published_hint)
+        return await self._multiple_descriptors(self.relay_server_descriptor,
+                                                digests, published_hint)
 
     async def relay_microdescriptor(self, digest, valid_after_hint):
         """
@@ -812,7 +816,8 @@ class DirectoryArchive:
         :returns: A :py:class:`list` of
                   :py:class:`stem.descriptor.microdescriptor.Microdescriptor`.
         """
-        return await self._multiple_descriptors(self.relay_microdescriptor, digests, valid_after_hint)
+        return await self._multiple_descriptors(self.relay_microdescriptor,
+                                                digests, valid_after_hint)
 
     async def relay_extra_info_descriptor(self, digest, published_hint):
         """
@@ -846,7 +851,8 @@ class DirectoryArchive:
         :returns: A :py:class:`list` of
                   :py:class:`stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor`.
         """
-        return await self._multiple_descriptors(self.relay_extra_info_descriptor, digests, published_hint)
+        return await self._multiple_descriptors(
+            self.relay_extra_info_descriptor, digests, published_hint)
 
     async def relay_vote(self, v3ident, digest="*", valid_after=None):
         """
@@ -889,7 +895,7 @@ class DirectoryArchive:
         valid_after = valid_after or valid_after_now()
         if flavor == "microdesc":
             path = self.relay_microdescriptor_consensus_path(valid_after)
-        else: # probably we want "ns"
+        else:  # probably we want "ns"
             path = self.relay_consensus_path(valid_after)
         async with self.max_file_concurrency_lock:
             return await parse_file(path)
