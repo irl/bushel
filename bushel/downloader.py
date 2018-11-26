@@ -155,8 +155,8 @@ class DirectoryDownloader:
                                 directory caches that cache extra-info
                                 descriptors.
         """
-        if self.current_consensus is None:
-            # TODO: Check also that it's fresh!
+        if self.current_consensus is None or \
+              not self.current_consensus.is_valid():
             LOG.warning(
                 "Tried to use directory caches but we don't have a consensus")
             return self.directory_authorities()
