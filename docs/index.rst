@@ -14,6 +14,7 @@ Welcome to bushel's documentation!
 
    archive
    downloader
+   plugins
    references
 
 During initial development, the latest draft of the requirements and design
