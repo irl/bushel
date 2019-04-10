@@ -90,8 +90,8 @@ class TestLiveDirectoryDownloader:
         with assert_raises(TypeError):
             self.downloader.set_mode(1)
 
-    def test_mode_unknown(self):
-        with assert_raises(UnknownDirectoryCacheModeError):
+    def test_mode_string(self):
+        with assert_raises(TypeError):
             self.downloader.set_mode("unknown")
 
 def test_relay_server_descriptors_query_path():

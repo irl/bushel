@@ -3,96 +3,90 @@ Persistent filesystem-backed archive for Tor directory protocol
 descriptors. This is intended to be used as part of an :py:mod:`asyncio`
 application. File I/O operations are provided by coroutines and coroutine
 methods, with the actual I/O performed in an executor.
-
-.. data:: CollectorOutSubdirectory (enum)
-
-  Subdirectory names under the "out" directory as specified in §5.0 of
-  [collector-protocol]_.
-
-  ======================= ===========
-  Name                    Description
-  ======================= ===========
-  BRIDGE_DESCRIPTORS      Bridge descriptors (§5.2)
-  EXIT_LISTS              Exit lists (§5.1)
-  RELAY_DESCRIPTORS       Relay descriptors (§5.3)
-  TORPERF                 Torperf and Onionperf (§5.1)
-  WEBSTATS                Web server access logs (§5.4)
-  ======================= ===========
-
-.. data:: CollectorOutBridgeDescsMarker (enum)
-
-  Marker names under the "bridge-descriptors" directory as specified in
-  §5.2 of [collector-protocol]_.
-
-  ======================= ===========
-  Name                    Description
-  ======================= ===========
-  EXTRA_INFO              Bridge extra-info descriptors (§5.2.1)
-  SERVER_DESCRIPTOR       Bridge server descriptors (§5.2.1)
-  STATUS                  Bridge statuses (§5.2.2)
-  ======================= ===========
-
-.. data:: CollectorOutRelayDescsMarker (enum)
-
-  Marker names under the "relay-descriptors" directory as specified in
-  §5.3 of [collector-protocol]_.
-
-  ======================= ===========
-  Name                    Description
-  ======================= ===========
-  CONSENSUS               Network status consensuses (§5.3.2)
-  EXTRA_INFO              Relay extra-info descriptors (§5.3.2)
-  SERVER_DESCRIPTOR       Relay server descriptors (§5.3.2)
-  VOTE                    Network status votes (§5.3.2)
-  ======================= ===========
 """
 import asyncio
 import base64
 import datetime
+import enum
 import functools
 import glob
 import hashlib
-import io
 import logging
 import os
 import os.path
 
 import aiofiles
 
-import stem.util.str_tools
 from stem.descriptor import Descriptor
 from stem.descriptor import DocumentHandler
-from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
 from stem.descriptor.extrainfo_descriptor import BridgeExtraInfoDescriptor
+from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
 from stem.descriptor.microdescriptor import Microdescriptor
-from stem.descriptor.server_descriptor import RelayDescriptor
-from stem.descriptor.server_descriptor import BridgeDescriptor
 from stem.descriptor.networkstatus import NetworkStatusDocumentV3
-from stem.util import enum
+from stem.descriptor.server_descriptor import BridgeDescriptor
+from stem.descriptor.server_descriptor import RelayDescriptor
 
 LOG = logging.getLogger('bushel')
 
-CollectorOutSubdirectory = enum.Enum(  # pylint: disable=invalid-name
-    ('BRIDGE_DESCRIPTORS', 'bridge-descriptors'),
-    ('EXIT_LISTS', 'exit-lists'),
-    ('RELAY_DESCRIPTORS', 'relay-descriptors'),
-    ('TORPERF', 'torperf'),
-    ('WEBSTATS', 'webstats'),
-)
+class CollectorOutSubdirectory(enum.Enum):
+    """
+    Enumeration of subdirectory names under the "out" directory as specified in
+    §5.0 of [collector-protocol]_.
 
-CollectorOutRelayDescsMarker = enum.Enum(  # pylint: disable=invalid-name
-    ('CONSENSUS', 'consensus'),
-    ('EXTRA_INFO', 'extra-info'),
-    ('MICRODESC', 'microdesc'),
-    ('SERVER_DESCRIPTOR', 'server-descriptor'),
-    ('VOTE', 'vote'),
-)
+    ======================= ===========
+    Name                    Description
+    ======================= ===========
+    BRIDGE_DESCRIPTORS      Bridge descriptors (§5.2)
+    EXIT_LISTS              Exit lists (§5.1)
+    RELAY_DESCRIPTORS       Relay descriptors (§5.3)
+    TORPERF                 Torperf and Onionperf (§5.1)
+    WEBSTATS                Web server access logs (§5.4)
+    ======================= ===========
+    """
+    BRIDGE_DESCRIPTORS = 'bridge-descriptors'
+    EXIT_LISTS = 'exit-lists'
+    RELAY_DESCRIPTORS = 'relay-descriptors'
+    TORPERF = 'torperf'
+    WEBSTATS = 'webstats'
 
-CollectorOutBridgeDescsMarker = enum.Enum(  # pylint: disable=invalid-name
-    ('EXTRA_INFO', 'extra-info'),
-    ('SERVER_DESCRIPTOR', 'server-descriptor'),
-    ('STATUSES', 'statuses'),
-)
+
+class CollectorOutRelayDescsMarker(enum.Enum):
+    """
+    Enumeration of marker names under the "relay-descriptors" directory as
+    specified in §5.3 of [collector-protocol]_.
+
+    ======================= ===========
+    Name                    Description
+    ======================= ===========
+    CONSENSUS               Network status consensuses (§5.3.2)
+    EXTRA_INFO              Relay extra-info descriptors (§5.3.2)
+    SERVER_DESCRIPTOR       Relay server descriptors (§5.3.2)
+    VOTE                    Network status votes (§5.3.2)
+    ======================= ===========
+    """
+    CONSENSUS = 'consensus'
+    EXTRA_INFO = 'extra-info'
+    MICRODESC = 'microdesc'
+    SERVER_DESCRIPTOR = 'server-descriptor'
+    VOTE = 'vote'
+
+
+class CollectorOutBridgeDescsMarker(enum.Enum):
+    """
+    Enumeration of marker names under the "bridge-descriptors" directory as
+    specified in §5.2 of [collector-protocol]_.
+
+    ======================= ===========
+    Name                    Description
+    ======================= ===========
+    EXTRA_INFO              Bridge extra-info descriptors (§5.2.1)
+    SERVER_DESCRIPTOR       Bridge server descriptors (§5.2.1)
+    STATUS                  Bridge statuses (§5.2.2)
+    ======================= ===========
+    """
+    EXTRA_INFO = 'extra-info'
+    SERVER_DESCRIPTOR = 'server-descriptor'
+    STATUSES = 'statuses'
 
 
 async def parse_file(path, **kwargs):
@@ -288,7 +282,7 @@ def collector_521_path(subdirectory, marker, published, digest):
     :returns: Path for the descriptor as a :py:class:`str`.
     """
     digest = digest.lower()
-    return os.path.join(subdirectory, marker,
+    return os.path.join(subdirectory.value, marker.value,
                         collector_521_substructure(published, digest),
                         f"{digest}")
 
@@ -350,7 +344,7 @@ def collector_522_path(subdirectory, marker, valid_after, filename):
 
     :returns: Path for the descriptor as a :py:class:`str`.
     """
-    return os.path.join(subdirectory, marker,
+    return os.path.join(subdirectory.value, marker.value,
                         collector_522_substructure(valid_after), filename)
 
 
@@ -376,8 +370,8 @@ def collector_534_consensus_path(valid_after):
     >>> collector_534_consensus_path(valid_after)
     'relay-descriptors/microdesc/2018/11/consensus-microdesc/19/2018-11-19-15-00-00-consensus-microdesc'
     """
-    return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS,
-                        CollectorOutRelayDescsMarker.MICRODESC,
+    return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS.value,
+                        CollectorOutRelayDescsMarker.MICRODESC.value,
                         collector_533_substructure(valid_after),
                         "consensus-microdesc", f"{valid_after.day:02d}",
                         collector_434_filename(valid_after))
@@ -402,8 +396,8 @@ def collector_534_microdescriptor_path(valid_after, digest):
     'relay-descriptors/microdesc/2018/11/micro/0/0/00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f'
     """
     digest = digest.lower()
-    return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS,
-                        CollectorOutRelayDescsMarker.MICRODESC,
+    return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS.value,
+                        CollectorOutRelayDescsMarker.MICRODESC.value,
                         collector_533_substructure(valid_after), "micro",
                         f"{digest[0]}", f"{digest[1]}", f"{digest}")
 
@@ -508,8 +502,7 @@ class DirectoryArchive:
             # TODO: The digest functionality should be appearing in stem.
             # https://trac.torproject.org/projects/tor/ticket/28398
             raw_content, ending = str(descriptor), "\ndirectory-signature "
-            raw_content = stem.util.str_tools._to_bytes(
-                raw_content[:raw_content.find(ending) + len(ending)])
+            raw_content = raw_content[:raw_content.find(ending) + len(ending)].encode("utf-8")
             digest = hashlib.sha1(raw_content).hexdigest().upper()
             fpath = self.relay_vote_path(
                 descriptor.valid_after,
