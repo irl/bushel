@@ -447,16 +447,12 @@ class DirectoryArchive:
                              location of the directory to use for the archive.
                              This location must exist, but may be an empty
                              directory.
-    :param bool legacy_archive: If True, disables the use of symlinks for
-                                faster descriptor retrieval.
     """
 
     def __init__(self,
                  archive_path,
-                 legacy_archive=False,
                  max_file_concurrency=100):
         self.archive_path = archive_path
-        self.legacy_archive = legacy_archive
         self.max_file_concurrency_lock = asyncio.BoundedSemaphore(
             max_file_concurrency)
 

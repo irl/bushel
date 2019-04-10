@@ -116,6 +116,6 @@ class DirectoryArchiveScrubber:
         return stats
 
 async def scrub(args):
-    archive = DirectoryArchive(".", legacy_archive=args.legacy_archive)
+    archive = DirectoryArchive(".")
     scrubber = DirectoryArchiveScrubber(archive)
     await scrubber.scrub(args.path, args.ignore_extra_info)
