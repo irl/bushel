@@ -1,4 +1,5 @@
 aiofiles
 nose
 requests
+pynacl
 -e git+http://git.torproject.org/stem.git#egg=stem

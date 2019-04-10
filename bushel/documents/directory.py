@@ -5,7 +5,7 @@ import re
 import nacl.signing
 import nacl.encoding
 
-from bushel.documents.base import Document
+from bushel.documents.base import BaseDocument
 
 Token = collections.namedtuple('Token', ['type', 'value', 'line', 'column'])
 
@@ -121,7 +121,7 @@ class DirectoryDocumentItem:
         return "\n".join(lines)
 
 
-class DirectoryDocument(Document):
+class DirectoryDocument(BaseDocument):
     def __init__(self, raw_content):
         super().__init__(raw_content)
 
