@@ -1,3 +1,4 @@
 aiofiles
 nose
+requests
 -e git+http://git.torproject.org/stem.git#egg=stem
