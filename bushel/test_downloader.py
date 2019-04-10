@@ -12,7 +12,6 @@ from bushel import DIRECTORY_AUTHORITIES
 from bushel import LOCAL_DIRECTORY_CACHE
 from bushel import DirectoryCacheMode
 from bushel.downloader import DirectoryDownloader
-from bushel.downloader import UnknownDirectoryCacheModeError
 from bushel.downloader import relay_server_descriptors_query_path
 from bushel.downloader import relay_extra_info_descriptors_query_path
 from bushel.downloader import relay_microdescriptors_query_path
