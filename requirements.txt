@@ -2,4 +2,5 @@ aiofiles
 nose
 requests
 pynacl
+straight.plugin
 -e git+http://git.torproject.org/stem.git#egg=stem

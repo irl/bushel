@@ -2,6 +2,9 @@ import asyncio
 import argparse
 import logging
 
+from straight.plugin import load
+
+from bushel import PluggableCommand
 from bushel.scrub import scrub
 from bushel.scraper import scrape
 
@@ -38,6 +41,11 @@ def main():
     parser_scrub.add_argument("--legacy-archive", help="Strict CollecTor File Structure Protocol mode", default=False, action="store_true")
     parser_scrub.add_argument("--ignore-extra-info", help="Ignore references to extra-info descriptors", default=False, action="store_true")
     parser_scrub.set_defaults(coro=scrub)
+
+    cmds = load("bushel.cmd", subclasses=PluggableCommand)
+
+    for cmd in cmds:
+        cmd.register_subparser(subparsers)
 
     args = parser.parse_args()
     logging.getLogger("bushel").setLevel(

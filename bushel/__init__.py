@@ -49,3 +49,8 @@ class DirectoryCacheMode(enum.Enum):
     CLIENT = 'CLIENT'
     DIRECTORY_CACHE = 'DIRECTORY_CACHE'
     TESTING = 'TESTING'
+
+class PluggableCommand:
+    @staticmethod
+    def register_subparser(subparsers):
+        raise NotImplementedError("Cannot register an abstract plugin")
