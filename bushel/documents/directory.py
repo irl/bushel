@@ -329,34 +329,26 @@ class DirectoryDocument(BaseDocument):
         ... onion-magic
         ... -----BEGIN ONION MAGIC-----
         ... AQQABp6MAT7yJjlcuWLDbr8A5J8YgyDh5SPYkLpj7fmcBaFbKekjAQAgBADKnR/C
-        ... -----END ED25519 CERT-----'''
+        ... -----END ONION MAGIC-----'''
         >>> for token in DirectoryDocument(document_bytes).tokenize():
         ...     print(token)
         DirectoryDocumentToken(kind='PRINTABLE', value='super-keyword', line=1, column=0)
         DirectoryDocumentToken(kind='WS', value=' ', line=1, column=13)
         DirectoryDocumentToken(kind='PRINTABLE', value='3', line=1, column=14)
-        DirectoryDocumentToken(kind='NL', value='\\n', line=2, column=15)
+        DirectoryDocumentToken(kind='NL', value='\n', line=2, column=15)
         DirectoryDocumentToken(kind='PRINTABLE', value='onion-magic', line=2, column=0)
-        DirectoryDocumentToken(kind='NL', value='\\n', line=3, column=11)
-        DirectoryDocumentToken(kind='PRINTABLE', value='-----BEGIN', line=3, column=0)
-        DirectoryDocumentToken(kind='WS', value=' ', line=3, column=10)
-        DirectoryDocumentToken(kind='PRINTABLE', value='ONION', line=3, column=11)
-        DirectoryDocumentToken(kind='WS', value=' ', line=3, column=16)
-        DirectoryDocumentToken(kind='PRINTABLE', value='MAGIC-----', line=3, column=17)
-        DirectoryDocumentToken(kind='NL', value='\\n', line=4, column=27)
-        DirectoryDocumentToken(kind='PRINTABLE', value='AQQ...R/C', line=4, column=0)
-        DirectoryDocumentToken(kind='NL', value='\\n', line=5, column=64)
-        DirectoryDocumentToken(kind='PRINTABLE', value='-----END', line=5, column=0)
-        DirectoryDocumentToken(kind='WS', value=' ', line=5, column=8)
-        DirectoryDocumentToken(kind='PRINTABLE', value='ED25519', line=5, column=9)
-        DirectoryDocumentToken(kind='WS', value=' ', line=5, column=16)
-        DirectoryDocumentToken(kind='PRINTABLE', value='CERT-----', line=5, column=17)
-        DirectoryDocumentToken(kind='EOF', value=None, line=5, column=17)
+        DirectoryDocumentToken(kind='NL', value='\n', line=3, column=11)
+        DirectoryDocumentToken(kind='BEGIN', value='ONION MAGIC', line=3, column=0)
+        DirectoryDocumentToken(kind='NL', value='\n', line=4, column=27)
+        DirectoryDocumentToken(kind='PRINTABLE', value='AQ.../C', line=4, column=0)
+        DirectoryDocumentToken(kind='NL', value='\n', line=5, column=64)
+        DirectoryDocumentToken(kind='END', value='ONION MAGIC', line=5, column=0)
+        DirectoryDocumentToken(kind='EOF', value=None, line=5, column=0)
 
         :returns: iterator for :class:`DirectoryDocumentToken`
         """
-        token_specification = [('END', r'-----END [A-Za-z0-9-]+-----'),
-                               ('BEGIN', r'-----BEGIN [A-Za-z0-9-]+-----'),
+        token_specification = [('END', r'-----END [A-Za-z0-9- ]+-----'),
+                               ('BEGIN', r'-----BEGIN [A-Za-z0-9- ]+-----'),
                                ('NL', r'\n'), ('PRINTABLE', r'\S+'),
                                ('WS', r'[ \t]+'), ('MISMATCH', r'.')]
         tok_regex = '|'.join(
