@@ -13,6 +13,7 @@ Welcome to bushel's documentation!
    :caption: Contents:
 
    archive
+   directory
    downloader
    plugins
    references

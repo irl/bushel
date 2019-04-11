@@ -1,5 +1,6 @@
 import collections
 import datetime
+import enum
 import re
 
 import nacl.signing
@@ -7,8 +8,13 @@ import nacl.encoding
 
 from bushel.documents.base import BaseDocument
 
-Token = collections.namedtuple('Token', ['type', 'value', 'line', 'column'])
-
+class DirectoryDocumentToken(collections.namedtuple('Token', ['kind', 'value', 'line', 'column'])):
+    """
+    :var DirectoryDocumentTokenType kind: the kind of token
+    :var bytes value: kind-dependent value
+    :var int line: line number
+    :var int column: column number
+    """
 
 def parse_timestamp(item, argindex=0):
     timestamp = f"{item.arguments[argindex]} {item.arguments[argindex+1]}"
@@ -120,8 +126,171 @@ class DirectoryDocumentItem:
         lines.extend(object_lines)
         return "\n".join(lines)
 
+class DirectoryDocumentItemError(enum.Enum):
+    """
+    Enumeration of forgivable errors that may be encountered during itemization
+    of a directory document.
+
+    ======================= ===========
+    Name                    Description
+    ======================= ===========
+    TRAILING_WHITESPACE     Trailing whitespace on KeywordLines
+                            https://bugs.torproject.org/30105
+    ======================= ===========
+    """
+
+    TRAILING_WHITESPACE = 'trailing-whitespace'
+
+
+class DirectoryDocumentItemizer:
+    """
+    Parses :class:`DirectoryDocumentToken` s into
+    :class:`DirectoryDocumentItem` s. By default this is a strict
+    implementation of the Tor directory protocol meta format (§1.2
+    [dir-spec]_), but this can be relaxed to account for implementation bugs in
+    known Tor implementations.
+
+    Items are produced by processing tokens according to a state machine:
+
+    .. graphviz::
+
+        digraph g {
+            start [label="START"];
+            keyword_line [label="KEYWORD-LINE"];
+            keyword_line_ws [label="KEYWORD-LINE-WS"];
+            keyword_line_end [label="KEYWORD-LINE-END"];
+            object_data [label="OBJECT-DATA"];
+
+            start -> keyword_line;
+            keyword_line -> keyword_line_end [label="NL"];
+            keyword_line -> keyword_line_ws [label="WS"];
+            keyword_line_ws -> keyword_line [label="PRINTABLE"];
+            keyword_line_ws -> keyword_line_end [label="NL", color="red"];
+            keyword_line_end -> object_data [label="BEGIN"];
+            keyword_line_end -> start [label="EOF"];
+            keyword_line_end -> keyword_line [label="PRINTABLE"];
+            object_data -> object_data [label="PRINTABLE"];
+            object_data -> keyword_line_end [label="END"];
+        }
+
+    State transitions shown in red would ideally not be needed as they are
+    protocol violations, but implementations of the protocol exist that produce
+    documents requiring these transitions and we need to be bug compatible.
+
+    :param allowed_errors:
+        A list of errors that will be considered non-fatal during itemization.
+    :type allowed_errors: list(DirectoryDocumentItemError)
+    """
+
+    def __init__(self, allowed_errors=None):
+        self.state = 'START'
+        self.allowed_errors = allowed_errors or []
+        self.reset_item_state()
+        self.token_handlers = {
+            'START': self.token_start,
+            'KEYWORD-LINE': self.token_keyword_line,
+            'KEYWORD-LINE-WS': self.token_keyword_line_ws,
+            'KEYWORD-LINE-END': self.token_keyword_line_end,
+            'OBJECT-DATA': self.token_object_data,
+            'DONE': self.token_done,
+        }
+
+    def item_done(self, next_keyword=None):
+        done_item = self.item()
+        self.reset_item_state(next_keyword=next_keyword)
+        self.state = 'KEYWORD-LINE' if next_keyword else 'START'
+        return done_item
+
+    def reset_item_state(self, next_keyword=None):
+        self.keyword = next_keyword
+        self.arguments = []
+        self.objects = []
+        self.errors = []
+        self.reset_object_state()
+
+    def commit_object(self):
+        self.objects.append((self.object_keyword, self.object_data))
+        self.reset_object_state()
+
+    def reset_object_state(self):
+        object_keyword = None
+        object_data = []
+
+    def error(self, error):
+        if error in self.allowed_errors:
+            self.errors.append(error)
+        else:
+            raise RuntimeError(f"Encountered a {error.value} error on line "
+                               f"{self.token.line} at col {self.token.column}")
+
+    def expected_not_found(self, expected):
+        raise RuntimeError(f"Expected {expected} on line "
+                           f"{self.token.line} at "
+                           f"col {self.token.column}, but found "
+                           f"{self.token.kind} {self.token.value}")
+
+    def item(self):
+        return DirectoryDocumentItem(self.keyword, self.arguments, self.objects,
+                                     self.errors)
+
+    def eat(self, token):
+        self.token = token
+        return self.token_handlers[self.state]()
+
+    def token_start(self):
+        if self.token.kind == 'PRINTABLE':
+            self.keyword = self.token.value
+            self.state = 'KEYWORD-LINE'
+        else:
+            self.expected_not_found("keyword")
+
+    def token_keyword_line(self):
+        if self.token.kind == 'NL':
+            self.state = 'KEYWORD-LINE-END'
+        elif self.token.kind == 'WS':
+            self.state = 'KEYWORD-LINE-WS'
+        else:
+            self.expected_not_found("whitespace or newline")
+
+    def token_keyword_line_ws(self):
+        if self.token.kind == 'NL':
+            self.error(DirectoryDocumentItemError.TRAILING_WHITESPACE)
+            self.state = 'KEYWORD-LINE-END'
+        elif self.token.kind == 'PRINTABLE':
+            self.arguments.append(self.token.value)
+            self.state = 'KEYWORD-LINE'
+        else:
+            self.expected_not_found("argument")
+
+    def token_keyword_line_end(self):
+        if self.token.kind == 'BEGIN':
+            self.object_keyword = self.token.value
+            self.state = 'OBJECT-DATA'
+        elif self.token.kind == 'PRINTABLE':
+            return self.item_done(next_keyword=self.token.value) # TODO: Why am I passing this?
+        elif self.token.kind == 'EOF':
+            return self.done_item()
+        else:
+            self.expected_not_found("begin line, keyword or EOF")
+
+    def token_object_data(self):
+        if self.token.kind == 'END':
+            self.objects.append((object_keyword, object_data))
+            self.reset_object_state()
+            self.state = 'KEYWORD-LINE-END'
+        elif self.token.kind == 'PRINTABLE':
+            self.object_data.append(token.value)
+        else:
+            self.expected_not_found("object data or end line")
+
+    def token_done(self):
+        self.expected_not_found("no more tokens")
+
 
 class DirectoryDocument(BaseDocument):
+    """
+    TODO
+    """
     def __init__(self, raw_content):
         super().__init__(raw_content)
 
@@ -130,84 +299,62 @@ class DirectoryDocument(BaseDocument):
             if item.keyword in self.PARSE_FUNCTIONS:
                 self.PARSE_FUNCTIONS[item.keyword](item)
 
-    def items(self):
-        # TODO: Write something more testable
-        state = 'START'
+    def items(self, allowed_errors=None):
+        itemizer = DirectoryDocumentItemizer(allowed_errors)
         for token in self.tokenize():
-            if state == 'START':
-                keyword = None  # This will never remain None, because if we don't find one, it's an error
-                arguments = []
-                object_keyword = None
-                object_data = None
-                trailing_whitespace = False
-                objects = None
-                if token.type != 'PRINTABLE':
-                    raise RuntimeError("Expected a keyword on line "
-                                       f"{token.line} at "
-                                       f"col {token.column}, but found "
-                                       f"{token.type} {token.value}")
-                keyword = token.value
-                state = 'KEYWORD-LINE'
-                continue
-            if state == 'KEYWORD-LINE':
-                if token.type == 'NL':
-                    state = 'KEYWORD-LINE-END'
-                    continue
-                if token.type != 'WS':
-                    raise RuntimeError(
-                        "Expected whitespace or newline on line "
-                        f"{token.line} at "
-                        f"col {token.column}, but found "
-                        f"{token.type}")
-                state = 'KEYWORD-LINE-WS'
-                continue
-            if state == 'KEYWORD-LINE-WS':
-                if token.type == 'NL':
-                    trailing_whitespace = True
-                    state = 'KEYWORD-LINE-END'
-                    continue
-                if token.type != 'PRINTABLE':
-                    raise RuntimeError("Expected argument on line "
-                                       f"{token.line} at "
-                                       f"col {token.column}, but found "
-                                       f"{token.type}")
-                arguments.append(token.value)
-                state = 'KEYWORD-LINE'
-                continue
-            if state == 'KEYWORD-LINE-END':
-                if token.type == 'BEGIN':
-                    object_keyword = token.value
-                    object_data = []
-                    if not objects:
-                        objects = []
-                    state = 'OBJECT-DATA'
-                    continue
-                elif token.type == 'PRINTABLE':
-                    yield DirectoryDocumentItem(keyword, arguments, objects,
-                                                trailing_whitespace)
-                    keyword = token.value
-                    arguments = []
-                    trailing_whitespace = False
-                    object_keyword = None
-                    object_data = None
-                    objects = None
-                    state = 'KEYWORD-LINE'
-                    continue
-                elif token.type == 'EOF':
-                    yield DirectoryDocumentItem(keyword, arguments, objects,
-                                                trailing_whitespace)
-                    continue
-            if state == 'OBJECT-DATA':
-                if token.type == 'END':
-                    objects.append((object_keyword, object_data))
-                    object_keyword = None
-                    object_data = None
-                    state = 'KEYWORD-LINE-END'
-                    continue
-                if token.type == 'PRINTABLE':
-                    object_data.append(token.value)
+            item = itemizer.eat(token)
+            if item:
+                yield item
 
     def tokenize(self):
+        """
+        Tokenizes the document using the following tokens:
+
+        ================== ======================================= ========
+        END                "-----END " Keyword "-----"             Keyword
+        BEGIN              "-----BEGIN " Keyword "-----"           Keyword
+        NL                 The ascii LF character (hex value 0x0a) Raw data
+        PRINTABLE          Printing, non-whitespace, UTF-8         Raw data
+        WS                 Space or tab                            Raw data
+        MISMATCH           Anything else (likely binary nonsense)  Raw data
+        ================== ======================================= ========
+
+        Note that these tokens do not match the non-terminals exactly as they
+        are specified in the Tor directory protocol meta format. In particular,
+        the PRINTABLE token is used for both keywords and arguments (and object
+        data). It is up to whatever is processing these tokens to decide if
+        something is valid keyword or argument.
+
+        >>> document_bytes = b'''super-keyword 3
+        ... onion-magic
+        ... -----BEGIN ONION MAGIC-----
+        ... AQQABp6MAT7yJjlcuWLDbr8A5J8YgyDh5SPYkLpj7fmcBaFbKekjAQAgBADKnR/C
+        ... -----END ED25519 CERT-----'''
+        >>> for token in DirectoryDocument(document_bytes).tokenize():
+        ...     print(token)
+        DirectoryDocumentToken(kind='PRINTABLE', value='super-keyword', line=1, column=0)
+        DirectoryDocumentToken(kind='WS', value=' ', line=1, column=13)
+        DirectoryDocumentToken(kind='PRINTABLE', value='3', line=1, column=14)
+        DirectoryDocumentToken(kind='NL', value='\\n', line=2, column=15)
+        DirectoryDocumentToken(kind='PRINTABLE', value='onion-magic', line=2, column=0)
+        DirectoryDocumentToken(kind='NL', value='\\n', line=3, column=11)
+        DirectoryDocumentToken(kind='PRINTABLE', value='-----BEGIN', line=3, column=0)
+        DirectoryDocumentToken(kind='WS', value=' ', line=3, column=10)
+        DirectoryDocumentToken(kind='PRINTABLE', value='ONION', line=3, column=11)
+        DirectoryDocumentToken(kind='WS', value=' ', line=3, column=16)
+        DirectoryDocumentToken(kind='PRINTABLE', value='MAGIC-----', line=3, column=17)
+        DirectoryDocumentToken(kind='NL', value='\\n', line=4, column=27)
+        DirectoryDocumentToken(kind='PRINTABLE', value='AQQ...R/C', line=4, column=0)
+        DirectoryDocumentToken(kind='NL', value='\\n', line=5, column=64)
+        DirectoryDocumentToken(kind='PRINTABLE', value='-----END', line=5, column=0)
+        DirectoryDocumentToken(kind='WS', value=' ', line=5, column=8)
+        DirectoryDocumentToken(kind='PRINTABLE', value='ED25519', line=5, column=9)
+        DirectoryDocumentToken(kind='WS', value=' ', line=5, column=16)
+        DirectoryDocumentToken(kind='PRINTABLE', value='CERT-----', line=5, column=17)
+        DirectoryDocumentToken(kind='EOF', value=None, line=5, column=17)
+
+        :returns: iterator for :class:`DirectoryDocumentToken`
+        """
         token_specification = [('END', r'-----END [A-Za-z0-9-]+-----'),
                                ('BEGIN', r'-----BEGIN [A-Za-z0-9-]+-----'),
                                ('NL', r'\n'), ('PRINTABLE', r'\S+'),
@@ -230,5 +377,5 @@ class DirectoryDocument(BaseDocument):
             if kind == 'MISMATCH':
                 raise RuntimeError(
                     f'{value!r} unexpected on line {line_num} at col {column}')
-            yield Token(kind, value, line_num, column)
-        yield Token('EOF', None, line_num, column)
+            yield DirectoryDocumentToken(kind, value, line_num, column)
+        yield DirectoryDocumentToken('EOF', None, line_num, column)
