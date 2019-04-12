@@ -14,6 +14,17 @@ authority_dir_ports = [
     "128.31.0.34:9131",
 ]
 
+def detached_signature(server=None):
+    if server is None:
+        server = random.choice(authority_dir_ports)
+    timing = "next" if future else "current"
+    if flavor == "ns":
+        flavor = ""
+    else:
+        flavor = "-" + flavor
+    r = requests.get(f"http://{server}/tor/status-vote/next/consensus-signatures")
+    return r.content
+
 def consensus(server=None, flavor="ns", future=False):
     if server is None:
         server = random.choice(authority_dir_ports)
