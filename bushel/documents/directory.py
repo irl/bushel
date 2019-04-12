@@ -294,7 +294,7 @@ class DirectoryDocumentItem:
         if self.objects:
             for obj in self.objects:
                 object_lines.append(f"-----BEGIN {obj[0]}-----")
-                object_lines.extend(obj[1])
+                #object_lines.extend(obj[1]) #  TODO: encode data back to base64 again
                 object_lines.append(f"-----END {obj[0]}-----")
         lines = [f"{self.keyword}{arguments}"]
         lines.extend(object_lines)
