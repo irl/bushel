@@ -137,7 +137,9 @@ class DirectoryCertificate:
     def parse(self):
         """
         Parses the certificate to make the fields available via instance
-        attributes. This does not validate or verify the certificate.
+        attributes. This does not validate or verify the certificate, but must
+        be called before making calls to :meth:`~DirectoryCertificate.is_valid`
+        or :meth:`~DirectoryCertificate.verify`.
         """
         # TODO: check that the data is at least long enough for zero extensions
         self.version = int.from_bytes(self.raw_content[0:1], "big")
@@ -169,15 +171,40 @@ class DirectoryCertificate:
         return index
 
     def is_valid(self):
-        # TODO: check for affecting validation extensions we don't know about
-        # TODO: check expiration date
-        pass
+        """
+        Checks that the certificate is valid. This is the counterpart to
+        :meth:`~DirectoryCertificate.verify` that checks that the certificate
+        data conforms to the specification. The two checks performed are:
+
+        * expiration date is not passed
+        * there are no extensions that affect validation that we do not
+          understand
+
+        .. note::
+
+            In the Tor Metrics use case, we need to check that certificates
+            were valid at the time they were expected to be valid, but
+            the current API does not support this.
+        """
+        if self.expiration_date > datetime.datetime.utcnow():
+            # TODO: Need to check based on provided time, not just now
+            raise RuntimeError("Attempted to validate a certificate but it "
+                               "has expired.")
+        known_extension_kinds = [4] # TODO: make this more global
+        for extension in self.extensions:
+            if extension.kind not in known_extension_kinds:
+                raise RuntimeError("Certificate has unknown extensions that "
+                                   "affect validation, so cannot validate.")
 
     def verify(self, verify_key_data=None):
         """
         Verify the certificate using the verification key. Optionally provide
         key material, otherwise the key found in the "signed-with-ed25519-key"
         (type 4) extension will be used.
+
+        This only verifies the signature. To validate the certificate data
+        the seperate :meth:`DirectoryCertificate.is_valid` method must be
+        used.
 
         .. warning::
 
