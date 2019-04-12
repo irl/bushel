@@ -1,9 +1,37 @@
+import collections
 import datetime
 import re
 
 from bushel.documents.directory import DirectoryDocument
 from bushel.documents.directory import expect_arguments
 from bushel.documents.directory import parse_timestamp
+
+
+class NetworkStatusConsensusDirectorySignature(collections.namedtuple(
+      "NetworkStatusConsensusDirectorySignature", ['algorithm', 'identity',
+                                                   'signing_key_digest',
+                                                   'signature'])):
+    """
+    Directory signatures as found in :class:`NetworkStatusConsensus`, defined
+    in the Tor directory protocol version 3 ([dir-spec]_ §3.4.1).
+
+    For the signature, we take the hash through the _space_ after
+    ``directory-signature``, not the newline: this ensures that all authorities
+    sign the same thing.
+
+    :var str algorithm:
+        one of "sha1" or "sha256", or *None* if this was not present
+    :var str identity:
+        hex-encoded digest of the authority identity key of the signing
+        authority
+    :var str signing_key_digest: 
+        hex-encoded digest of the current authority signing key of the signing
+        authority
+    :var bytes signature:
+        signature of the status document, with the initial item
+        "network-status-version", and the signature item "directory-signature",
+        using the signing key
+    """
 
 
 class NetworkStatusConsensus(DirectoryDocument):

@@ -1,3 +1,4 @@
+import base64
 import collections
 import datetime
 import enum
@@ -41,6 +42,18 @@ def parse_timestamp(item, argindex=0):
     timestamp = f"{item.arguments[argindex]} {item.arguments[argindex+1]}"
     return datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
 
+def decode_object_data(lines):
+    """
+    Decodes the base64 encoded data found within directory document objects.
+
+    :param list(str) lines:
+        the lines as found in a directory document object, not including
+        newlines or the begin/end lines
+
+    :returns: the decoded data
+    :rtype: bytes
+    """
+    return base64.b64decode("".join(lines))
 
 def expect_arguments(minargs, maxargs, strictmax=False):
     def expect_arguments_decorator(parser_func):
@@ -376,10 +389,6 @@ class DirectoryDocumentItemizer:
         self.state = 'KEYWORD-LINE' if next_keyword else 'START'
         return done_item
 
-    def commit_object(self):
-        self.objects.append((self.object_keyword, self.object_data))
-        self.reset_object_state()
-
     def error(self, error):
         if error in self.allowed_errors:
             self.errors.append(error)
@@ -442,7 +451,10 @@ class DirectoryDocumentItemizer:
 
     def token_object_data(self):
         if self.token.kind == 'END':
-            self.objects.append((self.object_keyword, self.object_data))
+            self.objects.append(DirectoryDocumentObject(
+                self.object_keyword,
+                decode_object_data(self.object_data)
+            ))
             self.reset_object_state()
             self.state = 'KEYWORD-LINE-END'
         elif self.token.kind == 'PRINTABLE':
@@ -554,9 +566,9 @@ class DirectoryDocument(BaseDocument):
                 line_start = mo.end()
                 line_num += 1
             if kind == 'BEGIN':
-                value = value[11:-5]
+                value = value[11:-6]
             if kind == 'END':
-                value = value[9:-5]
+                value = value[9:-6]
             if kind == 'MISMATCH':
                 raise RuntimeError(
                     f'{value!r} unexpected on line {line_num} at col {column}')
