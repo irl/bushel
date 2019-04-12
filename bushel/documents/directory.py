@@ -281,6 +281,7 @@ class DirectoryDocumentItemizer:
             keyword_line_ws [label="KEYWORD-LINE-WS"];
             keyword_line_end [label="KEYWORD-LINE-END"];
             object_data [label="OBJECT-DATA"];
+            object_data_eol [label="OBJECT-DATA-EOL"];
 
             start -> keyword_line;
             keyword_line -> keyword_line_end [label="NL"];
@@ -290,7 +291,8 @@ class DirectoryDocumentItemizer:
             keyword_line_end -> object_data [label="BEGIN"];
             keyword_line_end -> start [label="EOF"];
             keyword_line_end -> keyword_line [label="PRINTABLE"];
-            object_data -> object_data [label="PRINTABLE"];
+            object_data -> object_data_eol [label="PRINTABLE"];
+            object_data_eol -> object_data [label="NL"];
             object_data -> keyword_line_end [label="END"];
         }
 
@@ -313,7 +315,7 @@ class DirectoryDocumentItemizer:
             'KEYWORD-LINE-WS': self.token_keyword_line_ws,
             'KEYWORD-LINE-END': self.token_keyword_line_end,
             'OBJECT-DATA': self.token_object_data,
-            'DONE': self.token_done,
+            'OBJECT-DATA-EOL': self.token_object_data_eol,
         }
         # item state follows
         self.keyword = None
@@ -363,6 +365,8 @@ class DirectoryDocumentItemizer:
                                      self.errors)
 
     def eat(self, token):
+        #LOG.info("Itemizer state is %s", self.state)
+        #LOG.info("Next token is %s", token)
         self.token = token
         return self.token_handlers[self.state]()
 
@@ -410,11 +414,15 @@ class DirectoryDocumentItemizer:
             self.state = 'KEYWORD-LINE-END'
         elif self.token.kind == 'PRINTABLE':
             self.object_data.append(self.token.value)
+            self.state = 'OBJECT-DATA-EOL'
         else:
             self.expected_not_found("object data or end line")
 
-    def token_done(self):
-        self.expected_not_found("no more tokens")
+    def token_object_data_eol(self):
+        if self.token.kind == 'NL':
+            self.state = 'OBJECT-DATA'
+        else:
+            self.expected_not_found("newline")
 
 
 class DirectoryDocument(BaseDocument):
@@ -497,8 +505,8 @@ class DirectoryDocument(BaseDocument):
 
         :returns: iterator for :class:`DirectoryDocumentToken`
         """
-        token_specification = [('END', r'-----END [A-Za-z0-9- ]+-----'),
-                               ('BEGIN', r'-----BEGIN [A-Za-z0-9- ]+-----'),
+        token_specification = [('END', r'-----END [A-Za-z0-9- ]+-----\n'),
+                               ('BEGIN', r'-----BEGIN [A-Za-z0-9- ]+-----\n'),
                                ('NL', r'\n'), ('PRINTABLE', r'\S+'),
                                ('WS', r'[ \t]+'), ('MISMATCH', r'.')]
         tok_regex = '|'.join(
