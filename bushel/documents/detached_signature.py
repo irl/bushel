@@ -145,3 +145,7 @@ class DetachedSignature(DirectoryDocument):
     def is_valid(self):
         # TODO: Validate the document
         pass
+
+    def to_stem(self):
+        from stem.descriptor.networkstatus import DetachedSignature as StemDetachedSignature
+        return StemDetachedSignature(self.get_bytes())
