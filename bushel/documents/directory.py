@@ -17,6 +17,7 @@ import datetime
 import enum
 import logging
 import re
+import textwrap
 
 import nacl.signing
 import nacl.encoding
@@ -67,6 +68,21 @@ def decode_object_data(lines):
     :rtype: bytes
     """
     return base64.b64decode("".join(lines))
+
+def encode_object_data(data):
+    """
+    Encodes bytes using base64 and wraps the lines at 64 charachters.
+
+    :param bytes data:
+       the data to be encoded
+
+    :returns:
+        the line-wrapped base64 encoded data as a list of strings, one string
+        per line
+    :rtype: list(str)
+    """
+    encoded_data = base64.b64encode(data).decode("ascii")
+    return textwrap.wrap(encoded_data, width=64, break_long_words=True)
 
 def expect_arguments(minargs, maxargs, strictmax=False):
     def expect_arguments_decorator(parser_func):
@@ -293,9 +309,9 @@ class DirectoryDocumentItem:
         object_lines = []
         if self.objects:
             for obj in self.objects:
-                object_lines.append(f"-----BEGIN {obj[0]}-----")
-                #object_lines.extend(obj[1]) #  TODO: encode data back to base64 again
-                object_lines.append(f"-----END {obj[0]}-----")
+                object_lines.append(f"-----BEGIN {obj.keyword}-----")
+                object_lines.extend(encode_object_data(obj.data))
+                object_lines.append(f"-----END {obj.keyword}-----")
         lines = [f"{self.keyword}{arguments}"]
         lines.extend(object_lines)
         return "\n".join(lines)
