@@ -283,7 +283,7 @@ class DirectoryDocumentItemizer:
             object_data [label="OBJECT-DATA"];
             object_data_eol [label="OBJECT-DATA-EOL"];
 
-            start -> keyword_line;
+            start -> keyword_line [label="PRINATABLE"];
             keyword_line -> keyword_line_end [label="NL"];
             keyword_line -> keyword_line_ws [label="WS"];
             keyword_line_ws -> keyword_line [label="PRINTABLE"];
@@ -299,6 +299,12 @@ class DirectoryDocumentItemizer:
     State transitions shown in red would ideally not be needed as they are
     protocol violations, but implementations of the protocol exist that produce
     documents requiring these transitions and we need to be bug compatible.
+
+    .. warning::
+
+        All printable strings are treated equally right now, so we're not
+        testing for keywords being the restricted set, nor are we decoding
+        object data yet.
 
     :param allowed_errors:
         A list of errors that will be considered non-fatal during itemization.
