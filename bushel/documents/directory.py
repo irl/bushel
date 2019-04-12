@@ -105,11 +105,38 @@ class DirectoryCertificate:
 
 
 class DirectoryDocumentItem:
-    def __init__(self, keyword, arguments, objects, trailing_whitespace):
+    """
+    A directory document item as described in the Tor directory protocol meta
+    format (§1.2 [dir-spec]_).
+
+    .. graphviz::
+
+        digraph g {
+            rankdir=LR;
+    
+            document [label="Document",shape="box"];
+            item [label="Item",style="filled",fillcolor="yellow",shape="box"];
+            object [label="Object",shape="box"];
+    
+            document->item [label="has one or more"];
+            item->object [label="has zero or more"];
+        }
+
+    :param bytes keyword: the item keyword
+    :param list(bytes) arguments: list of item arguments
+    :param list(tuple(bytes,bytes)) objects: list of item objects as tuples of (object keyword, decoded object data)
+    :param list(DirectoryDocumentItemError) errors: list of errors found during item parsing
+
+    :var bytes keyword: the item keyword
+    :var list(bytes) arguments: list of item arguments
+    :var list(tuple(bytes,bytes)) objects: list of item objects as tuples of (object keyword, decoded object data)
+    :var list(DirectoryDocumentItemError) errors: list of errors found during item parsing
+    """
+    def __init__(self, keyword, arguments, objects, errors):
         self.keyword = keyword
         self.arguments = arguments
         self.objects = objects
-        self.trailing_whitespace = trailing_whitespace
+        self.errors = errors
 
     def __str__(self):
         if self.arguments:
