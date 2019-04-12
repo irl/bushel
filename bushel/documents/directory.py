@@ -1,3 +1,16 @@
+"""
+The :mod:`bushel.document.directory` module provides base classes and utility
+methods for handling documents that implement the Tor directory protocol
+version 3 meta format (§1.2 [dir-spec]_).
+
+For specific document types, see:
+
+.. toctree::
+   :maxdepth: 2
+
+   directory/detached_signatures.rst
+"""
+
 import base64
 import collections
 import datetime
