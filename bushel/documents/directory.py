@@ -1,6 +1,7 @@
 import collections
 import datetime
 import enum
+import logging
 import re
 
 import nacl.signing
@@ -8,15 +9,35 @@ import nacl.encoding
 
 from bushel.documents.base import BaseDocument
 
-class DirectoryDocumentToken(collections.namedtuple('Token', ['kind', 'value', 'line', 'column'])):
-    """
-    :var DirectoryDocumentTokenType kind: the kind of token
-    :var bytes value: kind-dependent value
-    :var int line: line number
-    :var int column: column number
-    """
+LOG = logging.getLogger('bushel')
 
 def parse_timestamp(item, argindex=0):
+    """
+    Parses a timestamp from a directory document's item using the common format
+    from [dir-spec]_. This format is not defined explicitly but is used with
+    many keywords including ``valid-after``, ``fresh-until``, and
+    ``valid-until``.
+
+    .. note::
+
+        Due to the way the tokenizer works, timestamps are parsed as two
+        arguments split by whitespace. This function takes this into account
+        when parsing the timestamp.
+
+    Most items will have the timestamp as the first argument on the keyword
+    line. At the time of writing, there are no keywords defined that expect
+    timestamps at other indexes. Should this be required though, *argindex* may
+    be used to parse a timestamp from a later argument.
+
+    :param DirectoryDocumentItem item: the directory document item
+    :param int argindex:
+        zero-indexed index of date portion of timestamp, the time portion is
+        expected in ``argindex+1``
+
+    :returns: the parsed timestamp
+    :rtype: ~datetime.datetime
+    """
+
     timestamp = f"{item.arguments[argindex]} {item.arguments[argindex+1]}"
     return datetime.datetime.strptime(timestamp, "%Y-%m-%d %H:%M:%S")
 
@@ -37,7 +58,7 @@ def expect_arguments(minargs, maxargs, strictmax=False):
                 if strictmax:
                     raise RuntimeError(msg)
                 else:
-                    logger.warning(msg)
+                    LOG.warning(msg)
             return parser_func(self, item)
 
         return function_wrapper
@@ -48,25 +69,87 @@ def expect_arguments(minargs, maxargs, strictmax=False):
 class DirectoryCertificateExtension(
         collections.namedtuple('DirectoryCertificateExtension',
                                ['type', 'flags', 'data'])):
-    pass
+    """
+    A Tor Ed25519 certificate extension as specified by [cert-spec]_.
+
+    .. graphviz::
+
+        digraph g {
+            rankdir=LR;
+
+            certificate [label="Certificate",shape="box"];
+            extension [label="Extension",shape="box",style="filled",fillcolor="yellow"];
+
+            certificate->extension [label="has zero or more"];
+        }
+
+    :var int type: extension type
+    :var int flags: extension flags
+    :var bytes data: extension data
+
+    .. seealso:: These will be found in :class:`DirectoryCertificate` s.
+    """
 
 
 class DirectoryCertificate:
-    def __init__(self, data):
-        self.data = data
+    """
+    A Tor Ed25519 certificate as specified by [cert-spec]_. It is not the only
+    certificate format that Tor uses. Typically these are found as the data
+    contained within :class:`DirectoryDocumentObject` s.
+
+    .. graphviz::
+
+        digraph g {
+            rankdir=LR;
+
+            certificate [label="Certificate",shape="box",style="filled",fillcolor="yellow"];
+            extension [label="Extension",shape="box"];
+
+            certificate->extension [label="has zero or more"];
+        }
+
+    :param bytes raw_content: raw certificate contents
+
+    :var bytes data: raw certificate contents
+    :var int version: version of the certificate format (currently always 1)
+    :var int cert_type: type of certificate
+    :var ~datetime.datetime expiration_date: expiration date of certificate
+    :var int cert_key_type: type of certified key
+    :var bytes certified_key: an Ed25519 public key if cert_key_type is 1, or a
+                              SHA256 hash of some other key type depending on
+                              the value of cert_key_type
+    :var int n_extensions: declared number of extensions
+    :var list(DirectoryCertificateExtension) extensions: parsed extensions
+    :var bytes signature: certificate signature
+    """
+
+    def __init__(self, raw_content):
+        self.raw_content = raw_content
+        self.version = None
+        self.cert_type = None
+        self.expiration_date = None
+        self.cert_key_type = None
+        self.certified_key = None
+        self.n_extensions = None
+        self.extensions = None
+        self.signature = None
 
     def parse(self):
+        """
+        Parses the certificate to make the fields available via instance
+        attributes. This does not validate or verify the certificate.
+        """
         # TODO: check that the data is at least long enough for zero extensions
-        self.version = int.from_bytes(self.data[0:1], "big")
-        self.cert_type = int.from_bytes(self.data[1:2], "big")
+        self.version = int.from_bytes(self.raw_content[0:1], "big")
+        self.cert_type = int.from_bytes(self.raw_content[1:2], "big")
         self.expiration_date = datetime.datetime.utcfromtimestamp(
-            int.from_bytes(self.data[2:6], "big") * 3600)
-        self.cert_key_type = int.from_bytes(self.data[6:7], "big")
-        self.certified_key = self.data[7:39]
-        self.n_extensions = int.from_bytes(self.data[39:40], "big")
+            int.from_bytes(self.raw_content[2:6], "big") * 3600)
+        self.cert_key_type = int.from_bytes(self.raw_content[6:7], "big")
+        self.certified_key = self.raw_content[7:39]
+        self.n_extensions = int.from_bytes(self.raw_content[39:40], "big")
         index = self._parse_extensions()  # end of extensions
-        if len(self.data) - index == 64:
-            self.signature = self.data[-64:]
+        if len(self.raw_content) - index == 64:
+            self.signature = self.raw_content[-64:]
         else:
             pass
         # TODO: throw parse error if it went wrong
@@ -74,12 +157,12 @@ class DirectoryCertificate:
     def _parse_extensions(self):
         self.extensions = []
         index = 40
-        for n in range(self.n_extensions):
+        for _ in range(self.n_extensions):
             # len(length + kind + flags) = 4
-            length = int.from_bytes(self.data[index:index + 2], "big")
-            kind = int.from_bytes(self.data[index + 2:index + 3], "big")
-            flags = int.from_bytes(self.data[index + 3:index + 4], "big")
-            data = self.data[index + 4:index + 4 + length]
+            length = int.from_bytes(self.raw_content[index:index + 2], "big")
+            kind = int.from_bytes(self.raw_content[index + 2:index + 3], "big")
+            flags = int.from_bytes(self.raw_content[index + 3:index + 4], "big")
+            data = self.raw_content[index + 4:index + 4 + length]
             self.extensions.append(
                 DirectoryCertificateExtension(kind, flags, data))
             index += 4 + length
@@ -91,8 +174,19 @@ class DirectoryCertificate:
         pass
 
     def verify(self, verify_key_data=None):
-        # TODO: this verifies the raw data underneath, the fields may have
-        # been played with since parsing and the parser may also be wrong
+        """
+        Verify the certificate using the verification key. Optionally provide
+        key material, otherwise the key found in the "signed-with-ed25519-key"
+        (type 4) extension will be used.
+
+        .. warning::
+
+            This verifies the raw data that the object was initialized with,
+            the fields may have been played with since parsing and the parser
+            may also have unknown bugs.
+
+        :param bytes verify_key_data: an Ed25519 verification key
+        """
         if not verify_key_data:
             for extension in self.extensions:
                 if extension.type == 4:  # Signed-with-ed25519-key extension
@@ -100,7 +194,7 @@ class DirectoryCertificate:
                     break
         verify_key = nacl.signing.VerifyKey(verify_key_data,
                                             nacl.encoding.RawEncoder)
-        verify_key.verify(self.data[:-64], self.signature)
+        verify_key.verify(self.raw_content[:-64], self.signature)
         return True
 
 
@@ -113,11 +207,11 @@ class DirectoryDocumentItem:
 
         digraph g {
             rankdir=LR;
-    
+
             document [label="Document",shape="box"];
             item [label="Item",style="filled",fillcolor="yellow",shape="box"];
             object [label="Object",shape="box"];
-    
+
             document->item [label="has one or more"];
             item->object [label="has zero or more"];
         }
@@ -212,7 +306,7 @@ class DirectoryDocumentItemizer:
     def __init__(self, allowed_errors=None):
         self.state = 'START'
         self.allowed_errors = allowed_errors or []
-        self.reset_item_state()
+        self.token = None
         self.token_handlers = {
             'START': self.token_start,
             'KEYWORD-LINE': self.token_keyword_line,
@@ -221,12 +315,14 @@ class DirectoryDocumentItemizer:
             'OBJECT-DATA': self.token_object_data,
             'DONE': self.token_done,
         }
-
-    def item_done(self, next_keyword=None):
-        done_item = self.item()
-        self.reset_item_state(next_keyword=next_keyword)
-        self.state = 'KEYWORD-LINE' if next_keyword else 'START'
-        return done_item
+        # item state follows
+        self.keyword = None
+        self.arguments = []
+        self.objects = []
+        self.errors = []
+        # object state follows
+        self.object_keyword = None
+        self.object_data = []
 
     def reset_item_state(self, next_keyword=None):
         self.keyword = next_keyword
@@ -235,13 +331,19 @@ class DirectoryDocumentItemizer:
         self.errors = []
         self.reset_object_state()
 
+    def reset_object_state(self):
+        self.object_keyword = None
+        self.object_data = []
+
+    def item_done(self, next_keyword=None):
+        done_item = self.item()
+        self.reset_item_state(next_keyword=next_keyword)
+        self.state = 'KEYWORD-LINE' if next_keyword else 'START'
+        return done_item
+
     def commit_object(self):
         self.objects.append((self.object_keyword, self.object_data))
         self.reset_object_state()
-
-    def reset_object_state(self):
-        object_keyword = None
-        object_data = []
 
     def error(self, error):
         if error in self.allowed_errors:
@@ -296,17 +398,18 @@ class DirectoryDocumentItemizer:
         elif self.token.kind == 'PRINTABLE':
             return self.item_done(next_keyword=self.token.value) # TODO: Why am I passing this?
         elif self.token.kind == 'EOF':
-            return self.done_item()
+            return self.item_done()
         else:
             self.expected_not_found("begin line, keyword or EOF")
+        return None
 
     def token_object_data(self):
         if self.token.kind == 'END':
-            self.objects.append((object_keyword, object_data))
+            self.objects.append((self.object_keyword, self.object_data))
             self.reset_object_state()
             self.state = 'KEYWORD-LINE-END'
         elif self.token.kind == 'PRINTABLE':
-            self.object_data.append(token.value)
+            self.object_data.append(self.token.value)
         else:
             self.expected_not_found("object data or end line")
 
@@ -316,10 +419,28 @@ class DirectoryDocumentItemizer:
 
 class DirectoryDocument(BaseDocument):
     """
-    TODO
+    A directory document as described in the Tor directory protocol meta
+    format (§1.2 [dir-spec]_).
+
+    .. graphviz::
+
+        digraph g {
+            rankdir=LR;
+
+            document [label="Document",shape="box",style="filled",fillcolor="yellow"];
+            item [label="Item",shape="box"];
+            object [label="Object",shape="box"];
+
+            document->item [label="has one or more"];
+            item->object [label="has zero or more"];
+        }
+
+    :param bytes raw_content: raw document contents
     """
+
     def __init__(self, raw_content):
         super().__init__(raw_content)
+        self.PARSE_FUNCTIONS = dict()
 
     def parse(self):
         for item in self.items():
@@ -338,8 +459,10 @@ class DirectoryDocument(BaseDocument):
         Tokenizes the document using the following tokens:
 
         ================== ======================================= ========
-        END                "-----END " Keyword "-----"             Keyword
-        BEGIN              "-----BEGIN " Keyword "-----"           Keyword
+        Kind               Matches on                              Value
+        ================== ======================================= ========
+        END                ``"-----END " Keyword "-----"``         Keyword
+        BEGIN              ``"-----BEGIN " Keyword "-----"``       Keyword
         NL                 The ascii LF character (hex value 0x0a) Raw data
         PRINTABLE          Printing, non-whitespace, UTF-8         Raw data
         WS                 Space or tab                            Raw data
@@ -398,3 +521,34 @@ class DirectoryDocument(BaseDocument):
                     f'{value!r} unexpected on line {line_num} at col {column}')
             yield DirectoryDocumentToken(kind, value, line_num, column)
         yield DirectoryDocumentToken('EOF', None, line_num, column)
+
+
+class DirectoryDocumentToken(collections.namedtuple('DirectoryDocumentToken', ['kind', 'value', 'line', 'column'])):
+    """
+    :var DirectoryDocumentTokenType kind: the kind of token
+    :var bytes value: kind-dependent value
+    :var int line: line number
+    :var int column: column number
+    """
+
+class DirectoryDocumentObject(collections.namedtuple('DirectoryDocumentObject', ['keyword', 'data'])):
+    """
+    A directory document item as described in the Tor directory protocol meta
+    format (§1.2 [dir-spec]_).
+
+    .. graphviz::
+
+        digraph g {
+            rankdir=LR;
+
+            document [label="Document",shape="box"];
+            item [label="Item",shape="box"];
+            object [label="Object",shape="box",style="filled",fillcolor="yellow"];
+
+            document->item [label="has one or more"];
+            item->object [label="has zero or more"];
+        }
+
+    :var bytes keyword: object keyword
+    :var bytes data: decoded object data
+    """

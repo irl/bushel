@@ -8,7 +8,3 @@ class BaseDocument:
 
     def __str__():
         return self.raw_content.decode('utf-8')
-
-    def get_annotations():
-        raise NotImplementedError("Cannot get annotations of an abstract "
-                                  "document.")

@@ -1,6 +1,9 @@
 References
 ==========
 
+.. [cert-spec] Ed25519 certificates in Tor.
+   https://spec.torproject.org/cert-spec
+
 .. [collector-protocol] Protocol of CollecTor's File Structure.
    https://spec.torproject.org/collector-protocol
 
