@@ -100,11 +100,11 @@ class DetachedSignature(DirectoryDocument):
 
     @expect_arguments(1, 2, False)
     def parse_fresh_until(self, item):
-        self.fresh_until = item.arguments[0]
+        self.fresh_until = parse_timestamp(item)
 
     @expect_arguments(1, 2, False)
     def parse_valid_until(self, item):
-        self.valid_until = item.arguments[0]
+        self.valid_until = parse_timestamp(item)
 
     @expect_arguments(3, 3, False)
     def parse_additional_digest(self, item):
