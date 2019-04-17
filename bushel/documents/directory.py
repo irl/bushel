@@ -591,23 +591,24 @@ class DirectoryDocument(BaseDocument):
             kind = mo.lastgroup
             value = mo.group()
             column = mo.start() - line_start
-            if kind == 'NL':
-                line_start = mo.end()
-                line_num += 1
             if kind == 'BEGIN':
                 value = value[11:-6]
-            if kind == 'END':
+            elif kind == 'END':
                 value = value[9:-6]
-            if kind == 'MISMATCH':
+            elif kind == 'MISMATCH':
                 raise RuntimeError(
                     f'{value!r} unexpected on line {line_num} at col {column}')
             yield DirectoryDocumentToken(kind, value, line_num, column)
+            if kind in ['NL', 'BEGIN', 'END']:
+                line_start = mo.end()
+                line_num += 1
+        column = mo.end() - line_start
         yield DirectoryDocumentToken('EOF', None, line_num, column)
 
 
 class DirectoryDocumentToken(collections.namedtuple('DirectoryDocumentToken', ['kind', 'value', 'line', 'column'])):
     """
-    :var DirectoryDocumentTokenType kind: the kind of token
+    :var str kind: the kind of token
     :var bytes value: kind-dependent value
     :var int line: line number
     :var int column: column number
