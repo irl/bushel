@@ -1,6 +1,9 @@
 References
 ==========
 
+.. [bandwidth-file-spec] Tor Bandwidth File Format.
+   https://spec.torproject.org/bandwidth-file-spec
+
 .. [cert-spec] Ed25519 certificates in Tor.
    https://spec.torproject.org/cert-spec
 
