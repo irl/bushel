@@ -1,7 +1,7 @@
 import sys
 
 from bushel import PluggableCommand
-from bushel.remote.collector import index
+from bushel.collector.remote import index
 
 def cmd_collector(args):
     sys.stdout.buffer.write(b"not implemented")

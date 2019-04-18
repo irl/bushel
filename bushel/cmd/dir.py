@@ -3,8 +3,8 @@ import sys
 from bushel import PluggableCommand
 from bushel.documents.directory import DirectoryDocument
 from bushel.documents.directory import DirectoryDocumentItemError
-from bushel.remote.directory import consensus
-from bushel.remote.directory import detached_signature
+from bushel.directory.remote import consensus
+from bushel.directory.remote import detached_signature
 
 def cmd_dir(args):
     sys.stdout.buffer.write(b"not implemented")
