@@ -2,9 +2,9 @@ import collections
 import datetime
 import re
 
-from bushel.documents.directory import DirectoryDocument
-from bushel.documents.directory import expect_arguments
-from bushel.documents.directory import parse_timestamp
+from bushel.directory.document import DirectoryDocument
+from bushel.directory.document import expect_arguments
+from bushel.directory.document import parse_timestamp
 
 
 class NetworkStatusConsensusDirectorySignature(collections.namedtuple(

@@ -1,5 +1,5 @@
 Directory Documents
 ===================
 
-.. automodule:: bushel.documents.directory
+.. automodule:: bushel.directory.document
    :members:

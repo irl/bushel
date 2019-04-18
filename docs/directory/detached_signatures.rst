@@ -1,5 +1,5 @@
 Detached Signatures
 ===================
 
-.. automodule:: bushel.documents.detached_signature
+.. automodule:: bushel.directory.detached_signature
    :members:

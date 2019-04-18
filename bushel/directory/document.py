@@ -22,7 +22,7 @@ import textwrap
 import nacl.signing
 import nacl.encoding
 
-from bushel.documents.base import BaseDocument
+from bushel.document import BaseDocument
 
 LOG = logging.getLogger('bushel')
 

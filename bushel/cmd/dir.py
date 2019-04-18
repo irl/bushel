@@ -1,8 +1,8 @@
 import sys
 
 from bushel import PluggableCommand
-from bushel.documents.directory import DirectoryDocument
-from bushel.documents.directory import DirectoryDocumentItemError
+from bushel.directory.document import DirectoryDocument
+from bushel.directory.document import DirectoryDocumentItemError
 from bushel.directory.remote import consensus
 from bushel.directory.remote import detached_signature
 

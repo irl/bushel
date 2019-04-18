@@ -1,10 +1,10 @@
 import collections
 import logging
 
-from bushel.documents.directory import DirectoryDocument
-from bushel.documents.directory import expect_arguments
-from bushel.documents.directory import parse_timestamp
-from bushel.documents.network_status_consensus import NetworkStatusConsensusDirectorySignature
+from bushel.directory.document import DirectoryDocument
+from bushel.directory.document import expect_arguments
+from bushel.directory.document import parse_timestamp
+from bushel.directory.network_status_consensus import NetworkStatusConsensusDirectorySignature
 
 LOG = logging.getLogger("bushel")
 
