@@ -1,5 +1,5 @@
-Directory Documents
-===================
+Tor Directory Protocol
+======================
 
-.. automodule:: bushel.directory.document
+.. automodule:: bushel.directory
    :members:

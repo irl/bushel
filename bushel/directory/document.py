@@ -1,5 +1,5 @@
 """
-The :mod:`bushel.document.directory` module provides base classes and utility
+The :mod:`bushel.directory.document` module provides base classes and utility
 methods for handling documents that implement the Tor directory protocol
 version 3 meta format (§1.2 [dir-spec]_).
 
@@ -8,7 +8,10 @@ For specific document types, see:
 .. toctree::
    :maxdepth: 2
 
-   directory/detached_signatures.rst
+   detached_signatures.rst
+   network_status.rst
+   server_descriptor.rst
+   extra_info_descriptor.rst
 """
 
 import base64
@@ -561,21 +564,21 @@ class DirectoryDocument(BaseDocument):
         ... onion-magic
         ... -----BEGIN ONION MAGIC-----
         ... AQQABp6MAT7yJjlcuWLDbr8A5J8YgyDh5SPYkLpj7fmcBaFbKekjAQAgBADKnR/C
-        ... -----END ONION MAGIC-----'''
+        ... -----END ONION MAGIC-----
+        ... '''
         >>> for token in DirectoryDocument(document_bytes).tokenize():
-        ...     print(token)
+        ...     print(token) # doctest: +ELLIPSIS
         DirectoryDocumentToken(kind='PRINTABLE', value='super-keyword', line=1, column=0)
         DirectoryDocumentToken(kind='WS', value=' ', line=1, column=13)
         DirectoryDocumentToken(kind='PRINTABLE', value='3', line=1, column=14)
-        DirectoryDocumentToken(kind='NL', value='\\n', line=2, column=15)
+        DirectoryDocumentToken(kind='NL', value='\\n', line=1, column=15)
         DirectoryDocumentToken(kind='PRINTABLE', value='onion-magic', line=2, column=0)
-        DirectoryDocumentToken(kind='NL', value='\\n', line=3, column=11)
+        DirectoryDocumentToken(kind='NL', value='\\n', line=2, column=11)
         DirectoryDocumentToken(kind='BEGIN', value='ONION MAGIC', line=3, column=0)
-        DirectoryDocumentToken(kind='NL', value='\\n', line=4, column=27)
-        DirectoryDocumentToken(kind='PRINTABLE', value='AQ.../C', line=4, column=0)
-        DirectoryDocumentToken(kind='NL', value='\\n', line=5, column=64)
+        DirectoryDocumentToken(kind='PRINTABLE', value='AQQ...DKnR/C', line=4, column=0)
+        DirectoryDocumentToken(kind='NL', value='\\n', line=4, column=64)
         DirectoryDocumentToken(kind='END', value='ONION MAGIC', line=5, column=0)
-        DirectoryDocumentToken(kind='EOF', value=None, line=5, column=0)
+        DirectoryDocumentToken(kind='EOF', value=None, line=6, column=0)
 
         :returns: iterator for :class:`DirectoryDocumentToken`
         """

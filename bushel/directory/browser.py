@@ -21,6 +21,7 @@ class Application(tk.Frame):
         self.quitButton = tk.Button(self, text='Quit', command=self.quit)
         self.quitButton.grid()
 
-app = Application()
-app.master.title('bushel directory')
-app.mainloop()
+if __name__ == "__main__":
+    app = Application()
+    app.master.title('bushel directory')
+    app.mainloop()

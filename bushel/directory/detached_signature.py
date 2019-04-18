@@ -4,7 +4,7 @@ import logging
 from bushel.directory.document import DirectoryDocument
 from bushel.directory.document import expect_arguments
 from bushel.directory.document import parse_timestamp
-from bushel.directory.network_status_consensus import NetworkStatusConsensusDirectorySignature
+from bushel.directory.network_status import NetworkStatusConsensusDirectorySignature
 
 LOG = logging.getLogger("bushel")
 
