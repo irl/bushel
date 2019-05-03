@@ -18,13 +18,30 @@ from bushel.document import BaseDocument
 
 LOG = logging.getLogger('bushel')
 
+class BandwidthFileLineError(enum.Enum):
+    """
+    Enumeration of forgivable errors that may be encountered during parsing of
+    lines in a bandwidth file.
+
+    ======================= ===========
+    Name                    Description
+    ======================= ===========
+    SHORT_TERMINATOR        A terminator with 4 `=` instead of 5.
+                            https://bugs.torproject.org/28379
+    NO_TERMINATOR           No terminator present, for pre-1.0.0 compatibility.
+    ======================= ===========
+    """
+
+    SHORT_TERMINATOR = "short-terminator"
+
 class BandwidthFileLiner:
     """
     Parses :class:`BandwidthFileToken` s into :class:`BandwidthFileTimestamp`,
     :class:`BandwidthFileHeaderLine` s and :class:`BandwidthFileRelayLine`. By
     default this is a strict implementation of the Tor Bandwidth File
     Specification version 1.4.0 [bandwidth-file-spec]_, but this can be relaxed
-    to account for implementation bugs in known Tor implementations.
+    to account for parsing older versions, or for known bugs in Tor
+    implementations.
 
     Lines are produced by processing tokens according to a state machine:
 
@@ -45,6 +62,8 @@ class BandwidthFileLiner:
             header_line -> header_line_kv [label="KEYVALUE"];
             header_line_kv -> header_line [label="NL"];
             header_line -> relay_line [label="TERMINATOR"];
+            header_line -> relay_line [label="SHORT_TERMINATOR", color="red"];
+            header_line_kv -> relay_line_sp [label="SP", color="red"];
             relay_line -> relay_line_kv [label="KEYVALUE"];
             relay_line_kv -> relay_line [label="NL"];
             relay_line_kv -> relay_line_sp [label="SP"];
@@ -65,16 +84,18 @@ class BandwidthFileLiner:
         self.state = 'START'
 
     def eat(self, token):
-        print(self.state)
-        print(token)
         if self.state == 'START':
             if token.kind == 'TIMESTAMP':
                 self.state = 'TIMESTAMP'
                 return
+            else:
+                self.expected_not_found("timestamp")
         elif self.state == 'TIMESTAMP':
             if token.kind == 'NL':
                 self.state = 'HEADER-LINE'
                 return
+            else:
+                self.expected_not_found("newline")
         elif self.state == 'HEADER-LINE':
             if token.kind == 'KEYVALUE':
                 self.state = 'HEADER-LINE-KV'
@@ -82,10 +103,22 @@ class BandwidthFileLiner:
             elif token.kind == 'TERMINATOR':
                 self.state = 'RELAY-LINE'
                 return
+            elif token.kind == 'SHORT_TERMINATOR':
+                self.state = 'RELAY-LINE'
+                # TODO: this is an error
+                return
+            else:
+                self.expected_not_found("terminator")
         elif self.state == 'HEADER-LINE-KV':
             if token.kind == 'NL':
                 self.state = 'HEADER-LINE'
                 return
+            elif token.kind == 'SP':
+                self.state = 'RELAY-LINE-SP'
+                # TODO: this is an error
+                return
+            else:
+                self.expected_not_found("newline (or space if pre-1.0.0)")
         elif self.state == 'RELAY-LINE':
             if token.kind == 'KEYVALUE':
                 self.state = 'RELAY-LINE-KV'
@@ -93,6 +126,8 @@ class BandwidthFileLiner:
             elif token.kind == 'EOF':
                 self.state = 'DONE'
                 return
+            else:
+                self.expected_not_found("keyvalue or eof")
         elif self.state == 'RELAY-LINE-KV':
             if token.kind == 'SP':
                 self.state = 'RELAY-LINE-SP'
@@ -100,11 +135,28 @@ class BandwidthFileLiner:
             elif token.kind == 'NL':
                 self.state = 'RELAY-LINE'
                 return
+            else:
+                self.expected_not_found("space or newline")
         elif self.state == 'RELAY-LINE-SP':
             if token.kind == 'KEYVALUE':
                 self.state = 'RELAY-LINE-KV'
                 return
+            else:
+                self.expected_not_found("keyvalue")
         raise RuntimeError("Bad state transition")
+
+    def error(self, error):
+        if error in self.allowed_errors:
+            self.errors.append(error)
+        else:
+            raise RuntimeError(f"Encountered a {error.value} error on line "
+                               f"{self.token.line} at col {self.token.column}")
+
+    def expected_not_found(self, expected):
+        raise RuntimeError(f"Expected {expected} on line "
+                           f"{self.token.line} at "
+                           f"col {self.token.column}, but found "
+                           f"{self.token.kind} {self.token.value}")
 
 class BandwidthFile(BaseDocument):
 
@@ -113,9 +165,9 @@ class BandwidthFile(BaseDocument):
         self.PARSE_FUNCTIONS = dict()
 
     def parse(self):
-        for item in self.items():
+        for line in self.lines():
             if item.keyword in self.PARSE_FUNCTIONS:
-                self.PARSE_FUNCTIONS[item.keyword](item)
+                self.PARSE_FUNCTIONS[line.keyword](item)
 
     def lines(self, allowed_errors=None):
         liner = BandwidthFileLiner(allowed_errors)
@@ -147,9 +199,10 @@ class BandwidthFile(BaseDocument):
 
         :returns: iterator for :class:`BandwidthFileToken`
         """
-        token_specification = [('TERMINATOR', r'=====?\n'),
+        token_specification = [('SHORT_TERMINATOR', r'====\n'),
+                               ('TERMINATOR', r'=====\n'),
                                ('TIMESTAMP', r'[0-9]+'),
-                               ('KEYVALUE', r'\S+=\S+'),
+                               ('KEYVALUE', r'[-A-Za-z0-9_]+=\S+'),
                                ('NL', r'\n'),
                                ('SP', r' '),
                                ('MISMATCH', r'.')]
