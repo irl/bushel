@@ -7,7 +7,7 @@ def cmd_collector(args):
     sys.stdout.buffer.write(b"not implemented")
 
 def cmd_index(args):
-    sys.stdout.buffer.write(index())
+    sys.stdout.buffer.write(get_index())
 
 class CollecTorCommand(PluggableCommand):
     @staticmethod

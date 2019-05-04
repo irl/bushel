@@ -39,6 +39,6 @@ class CollecTorIndex:
                     return directory['files']
             
 
-def index(path="https://collector.torproject.org"):
+def get_index(path="https://collector.torproject.org"):
     r = requests.get(path + "/index/index.json")
     return r.content
