@@ -10,6 +10,8 @@ import typing
 # Standard Nagios return codes
 OK, WARNING, CRITICAL, UNKNOWN = range(4)
 
+NagiosResponseT = typing.Tuple[int, str]
+
 def oldest_datetime(dts: typing.Dict[str, datetime.datetime]) -> typing.Tuple[str, datetime.datetime]:
     oldest_key = min(dts, key=lambda k: dts[k])
     oldest_dt = dts[oldest_key]
@@ -40,8 +42,7 @@ def nagios_return(status: int, message: str) -> None:
         status = UNKNOWN
     sys.exit(status)
 
-def nagios_wrapper(check_function: typing.Callable[[], None]) -> None:
-    status, message = None, None
+def nagios_wrapper(check_function: typing.Callable[[], typing.Tuple[int, str]]) -> None:
     try:
         status, message = check_function()
     except KeyboardInterrupt:
@@ -52,7 +53,7 @@ def nagios_wrapper(check_function: typing.Callable[[], None]) -> None:
     finally:
         nagios_return(status, message)
 
-def nagios_check(check_function: typing.Callable[[], None]) -> typing.Callable[[], None]:
+def nagios_check(check_function: typing.Callable[[], NagiosResponseT]) -> typing.Callable[[], None]:
     def wrapped_check():
         return nagios_wrapper(check_function)
     return wrapped_check

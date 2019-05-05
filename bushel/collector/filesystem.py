@@ -2,33 +2,46 @@
 CollecTor Filesystem Protocol.
 """
 # TODO: path.join implementation that uses either filesystem or web semantics
-import base64
-import collections
+import bz2
 import datetime
 import enum
-import functools
-import glob
-import hashlib
+import gzip
 import logging
 import os
 import os.path
-
-from stem.descriptor import Descriptor
-from stem.descriptor import DocumentHandler
-from stem.descriptor.extrainfo_descriptor import BridgeExtraInfoDescriptor
-from stem.descriptor.extrainfo_descriptor import RelayExtraInfoDescriptor
-from stem.descriptor.microdescriptor import Microdescriptor
-from stem.descriptor.networkstatus import NetworkStatusDocumentV3
-from stem.descriptor.server_descriptor import BridgeDescriptor
-from stem.descriptor.server_descriptor import RelayDescriptor
+import typing
+import lzma
 
 LOG = logging.getLogger('bushel')
 
-class CollectorInstance(collections.namedtuple("CollectorInstance", ["path", "recent"])):
+
+class CollecTorIndexCompression(enum.Enum):
     """
-    A CollecTor instance.
+    Enumeration of supported compression types for CollecTor indexes.
+
+    ======================= ===========
+    Name                    Description
+    ======================= ===========
+    UNCOMPRESSED            Uncompressed
+    BZ2                     bzip2
+    XZ                      xz
+    GZ                      gzip
+    ======================= ===========
+
+    :var str extension: Filename extension with leading dot (".").
     """
-    # TODO: This needs a better docstring.
+    UNCOMPRESSED = ("uncompresed", lambda x: x)
+    BZ2 = ("bz2", bz2.decompress)
+    XZ = ("xz", lzma.decompress)
+    GZ = ("gz", gzip.decompress)
+
+    def __init__(self, extension: str,
+                 decompress: typing.Callable[[bytes], bytes]) -> None:
+        if extension != "uncompresed":
+            self.extension = "." + extension
+        else:
+            self.extension = ""
+        self.decompress = decompress
 
 
 class CollectorRecentSubdirectory(enum.Enum):
@@ -114,7 +127,22 @@ class CollectorOutBridgeDescsMarker(enum.Enum):
     STATUSES = 'statuses'
 
 
-def collector_422_filename(valid_after, fingerprint):
+CollectorOutMarkerT = typing.Union[CollectorOutRelayDescsMarker,
+                                   CollectorOutBridgeDescsMarker]
+
+
+def collector_index_path(compression: CollecTorIndexCompression) -> str:
+    """
+    Create a path to the CollecTor index file, using the specified compression
+    algorithm.
+
+    :param CollecTorIndexCompression compression: Compression algorithm to use.
+    """
+    return "index/index.json" + compression.extension
+
+
+def collector_422_filename(valid_after: datetime.datetime,
+                           fingerprint: str) -> str:
     """
     Create a filename for a bridge status according to §4.2.2 of the
     [collector-protocol]_. For example:
@@ -135,7 +163,8 @@ def collector_422_filename(valid_after, fingerprint):
             f"{valid_after.minute:02d}{valid_after.second:02d}"
             f"-{fingerprint}")
 
-def collector_431_filename(valid_after):
+
+def collector_431_filename(valid_after: datetime.datetime) -> str:
     """
     Create a filename for a network status consensus according to §4.3.1 of the
     [collector-protocol]_. For example:
@@ -153,7 +182,8 @@ def collector_431_filename(valid_after):
             f"{valid_after.minute:02d}-{valid_after.second:02d}-consensus")
 
 
-def collector_433_filename(valid_after, v3ident, digest):
+def collector_433_filename(valid_after: datetime.datetime, v3ident: str,
+                           digest: str) -> str:
     """
     Create a filename for a network status vote according to §4.3.3 of the
     [collector-protocol]_.
@@ -185,7 +215,8 @@ def collector_433_filename(valid_after, v3ident, digest):
             f"{valid_after.minute:02d}-{valid_after.second:02d}-vote-"
             f"{v3ident}-{digest}")
 
-def collector_434_filename(valid_after):
+
+def collector_434_filename(valid_after: datetime.datetime) -> str:
     """
     Create a filename for a microdesc-flavoured network status consensus
     according to §4.3.4 of the [collector-protocol]_. For example:
@@ -203,7 +234,9 @@ def collector_434_filename(valid_after):
             f"{valid_after.minute:02d}-{valid_after.second:02d}-consensus-"
             "microdesc")
 
-def collector_521_substructure(published, digest):
+
+def collector_521_substructure(published: datetime.datetime,
+                               digest: str) -> str:
     """
     Create a path substructure according to §5.2.1 of the
     [collector-protocol]_. This is used for server-descriptors and extra-info
@@ -231,7 +264,10 @@ def collector_521_substructure(published, digest):
     return os.path.join(f"{published.year}", f"{published.month:02d}",
                         f"{digest[0]}", f"{digest[1]}")
 
-def collector_521_path(subdirectory, marker, published, digest):
+
+def collector_521_path(subdirectory: CollectorOutSubdirectory,
+                       marker: CollectorOutMarkerT,
+                       published: datetime.datetime, digest: str) -> str:
     """
     Create a path according to §5.2.1 of the [collector-protocol]_. This is
     used for server-descriptors and extra-info descriptors for both relays and
@@ -255,8 +291,8 @@ def collector_521_path(subdirectory, marker, published, digest):
                              use. Standard values can be found in
                              :py:data:`CollectorOutSubdirectory`.
     :param str marker: The marker under the subdirectory to use. Standard values
-                       can be found in :py:data:`CollectorOutRelayDescsMarker`
-                       and :py:data:`CollectorOutBridgeDescsMarker`.
+                       can be found in :class:`CollectorOutRelayDescsMarker`
+                       and :class:`CollectorOutBridgeDescsMarker`.
     :param ~datetime.datetime published: The published time.
     :param str digest: The hex-encoded SHA-1 digest for the descriptor. The
                        case will automatically be fixed to lower-case.
@@ -268,7 +304,8 @@ def collector_521_path(subdirectory, marker, published, digest):
                         collector_521_substructure(published, digest),
                         f"{digest}")
 
-def collector_522_substructure(valid_after):
+
+def collector_522_substructure(valid_after: datetime.datetime) -> str:
     """
     Create a path substructure according to §5.2.2 of the
     [collector-protocol]_. This is used for bridge statuses, and network-status
@@ -285,7 +322,10 @@ def collector_522_substructure(valid_after):
     return os.path.join(f"{valid_after.year}", f"{valid_after.month:02d}",
                         f"{valid_after.day:02d}")
 
-def collector_522_path(subdirectory, marker, valid_after, filename):
+
+def collector_522_path(subdirectory: CollectorOutSubdirectory,
+                       marker: CollectorOutMarkerT,
+                       valid_after: datetime.datetime, filename: str) -> str:
     """
     Create a path according to §5.2.2 of the [collector-protocol]_. This is
     used for bridge statuses, and network-status consensuses (both ns- and
@@ -312,8 +352,8 @@ def collector_522_path(subdirectory, marker, valid_after, filename):
                              use. Standard values can be found in
                              :py:data:`CollectorOutSubdirectory`.
     :param str marker: The marker under the subdirectory to use. Standard values
-                       can be found in :py:data:`CollectorOutRelayDescsMarker`
-                       and :py:data:`CollectorOutBridgeDescsMarker`.
+                       can be found in :class:`CollectorOutRelayDescsMarker`
+                       and :class:`CollectorOutBridgeDescsMarker`.
     :param ~datetime.datetime valid_after: The valid_after time.
     :param str filename: The filename to use as a :py:class:`str`, typically
                          created with :py:func:`collector_422_filename` for
@@ -327,7 +367,8 @@ def collector_522_path(subdirectory, marker, valid_after, filename):
     return os.path.join(subdirectory.value, marker.value,
                         collector_522_substructure(valid_after), filename)
 
-def collector_533_substructure(valid_after):
+
+def collector_533_substructure(valid_after: datetime.datetime) -> str:
     """
     Create a substructure according to §5.3.3 of the [collector-protocol]_.
     This is used for microdesc-flavored consensuses and microdescriptors. For
@@ -339,14 +380,15 @@ def collector_533_substructure(valid_after):
     """
     return os.path.join(f"{valid_after.year}", f"{valid_after.month:02d}")
 
+
 def collector_534_consensus_path(valid_after):
     """
     Create a path according to §5.3.4 of the [collector-protocol]_ for a
     **microdesc-flavored** consensus. For example:
 
     >>> valid_after = datetime.datetime(2018, 11, 19, 15)
-    >>> collector_534_consensus_path(valid_after)
-    'relay-descriptors/microdesc/2018/11/consensus-microdesc/19/2018-11-19-15-00-00-consensus-microdesc'
+    >>> collector_534_consensus_path(valid_after)  # doctest: +ELLIPSIS
+    'relay-descriptors/microdesc/2018/11/consensus-microdesc/19/2018-11-1...sc'
     """
     return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS.value,
                         CollectorOutRelayDescsMarker.MICRODESC.value,
@@ -354,41 +396,28 @@ def collector_534_consensus_path(valid_after):
                         "consensus-microdesc", f"{valid_after.day:02d}",
                         collector_434_filename(valid_after))
 
-def collector_534_microdescriptor_path(valid_after, digest):
+
+def collector_534_microdescriptor_path(valid_after: datetime.datetime,
+                                       digest: str) -> str:
     """
     Create a path according to §5.3.4 of the [collector-protocol]_ for a
     microdescriptor. For example:
 
     >>> valid_after = datetime.datetime(2018, 11, 19, 15)
     >>> digest = "00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f"
-    >>> collector_534_microdescriptor_path(valid_after, digest)
-    'relay-descriptors/microdesc/2018/11/micro/0/0/00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f'
+    >>> collector_534_microdescriptor_path(valid_after, digest)  # doctest: +ELLIPSIS
+    'relay-descriptors/microdesc/2018/11/micro/0/0/00d...e351453168f'
 
     This path in the Collector File Structure Protocol using this substructure
     expect *lower-case* hex-encoded SHA-256 digests.
 
     >>> valid_after = datetime.datetime(2018, 11, 19, 15)
     >>> digest = "00D91CF96321FBD536DD07E297A5E1B7E6961DDD10FACDD719716E351453168F"
-    >>> collector_534_microdescriptor_path(valid_after, digest)
-    'relay-descriptors/microdesc/2018/11/micro/0/0/00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f'
+    >>> collector_534_microdescriptor_path(valid_after, digest)  # doctest: +ELLIPSIS
+    'relay-descriptors/microdesc/2018/11/micro/0/0/00d...e351453168f'
     """
     digest = digest.lower()
     return os.path.join(CollectorOutSubdirectory.RELAY_DESCRIPTORS.value,
                         CollectorOutRelayDescsMarker.MICRODESC.value,
                         collector_533_substructure(valid_after), "micro",
                         f"{digest[0]}", f"{digest[1]}", f"{digest}")
-
-
-COLLECTOR_INSTANCES = [
-    CollectorInstance("https://collector.torproject.org/", [
-        CollectorRecentSubdirectory.BRIDGE_DESCRIPTORS,
-        CollectorRecentSubdirectory.EXIT_LISTS,
-        CollectorRecentSubdirectory.RELAY_DESCRIPTORS,
-        CollectorRecentSubdirectory.TORPERF,
-        CollectorRecentSubdirectory.WEBSTATS,
-    ]),
-    CollectorInstance("https://collector2.torproject.org/", [
-        CollectorRecentSubdirectory.EXIT_LISTS,
-        CollectorRecentSubdirectory.RELAY_DESCRIPTORS,
-    ]),
-]

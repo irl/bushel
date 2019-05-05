@@ -17,6 +17,7 @@ want to look at `stem <https://stem.torproject.org/>`_.
 
    archive
    bandwidth
+   collector
    directory
    downloader
    plugins
