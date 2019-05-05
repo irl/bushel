@@ -1,5 +1,5 @@
-CollecTor Protocol
-==================
+CollecTor
+=========
 
 .. automodule:: bushel.collector
    :members:
