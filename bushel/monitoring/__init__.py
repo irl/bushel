@@ -7,11 +7,12 @@ import datetime
 import sys
 import typing
 
+NagiosStatusCode = typing.NewType('NagiosStatusCode', int)
+
+NagiosResponseT = typing.Tuple[NagiosStatusCode, str]
+
 # Standard Nagios return codes
-OK, WARNING, CRITICAL, UNKNOWN = range(4)
-
-NagiosResponseT = typing.Tuple[int, str]
-
+OK, WARNING, CRITICAL, UNKNOWN = [NagiosStatusCode(x) for x in range(4)]
 
 def oldest_datetime(dts: typing.Dict[str, datetime.datetime]
                     ) -> typing.Tuple[str, datetime.datetime]:
@@ -24,7 +25,7 @@ def utc_datetime_too_old(
         dts: typing.Dict[str, datetime.datetime],
         warning_if_older: int,
         critical_if_older: int,
-        utcnow: datetime.datetime = None) -> typing.Tuple[int, str]:
+        utcnow: datetime.datetime = None) -> NagiosResponseT:
     utcnow = utcnow or datetime.datetime.utcnow()
     oldest_key, oldest_dt = oldest_datetime(dts)
     oldest_sec = (utcnow - oldest_dt).total_seconds()
@@ -38,7 +39,7 @@ def utc_datetime_too_old(
                (oldest_sec, oldest_key, oldest_dt.isoformat(), )
 
 
-def nagios_return(status: int, message: str) -> None:
+def nagios_return(status: NagiosStatusCode, message: str) -> None:
     if status == OK:
         print("OK: %s" % message)
     elif status == WARNING:
@@ -63,5 +64,4 @@ def nagios_check(check_function: typing.Callable[[], NagiosResponseT]
             message = repr(e)
         finally:
             nagios_return(status, message)
-
     return wrapped_check
