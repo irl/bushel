@@ -3,4 +3,5 @@ nose
 requests
 pynacl
 straight.plugin
+mypy
 -e git+http://git.torproject.org/stem.git#egg=stem
