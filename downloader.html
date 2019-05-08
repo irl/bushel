@@ -1,0 +1,302 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Directory Downloader &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Monitoring" href="monitoring.html" />
+    <link rel="prev" title="Directory Voting" href="directory/voting.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-bushel.downloader">
+<span id="directory-downloader"></span><h1>Directory Downloader<a class="headerlink" href="#module-bushel.downloader" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="bushel.downloader.DirectoryDownloader">
+<em class="property">class </em><code class="descclassname">bushel.downloader.</code><code class="descname">DirectoryDownloader</code><span class="sig-paren">(</span><em>initial_consensus=None</em>, <em>directory_cache_mode=None</em>, <em>max_concurrency=9</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#DirectoryDownloader"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.DirectoryDownloader" title="Permalink to this definition">¶</a></dt>
+<dd><p>The <a class="reference internal" href="#bushel.downloader.DirectoryDownloader" title="bushel.downloader.DirectoryDownloader"><code class="xref py py-class docutils literal notranslate"><span class="pre">DirectoryDownloader</span></code></a> provides an
+<a class="reference external" href="https://docs.python.org/3/library/asyncio.html#module-asyncio" title="(in Python v3.7)"><code class="xref py py-mod docutils literal notranslate"><span class="pre">asyncio</span></code></a>-compatible wrapper around the stem
+<a class="reference external" href="https://stem.torproject.org/api/descriptor/remote.html#stem.descriptor.remote.DescriptorDownloader" title="(in Stem v1.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DescriptorDownloader</span></code></a>, with two modes of
+operation:</p>
+<ul class="simple">
+<li><p>Directory Cache (<a class="reference internal" href="references.html#dir-spec" id="id1"><span>[dir-spec]</span></a> §4)</p></li>
+<li><p>Client (<a class="reference internal" href="references.html#dir-spec" id="id2"><span>[dir-spec]</span></a> §5)</p></li>
+</ul>
+<p>The DirectoryDownloader will not initiate downloads on its own intiative.
+It must be driven to perform downloads through the methods provided.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>As a valid consensus is required to implement parts of the
+functionality, the latest consensus is cached internally. This
+cached consensus should not be relied upon by external code. The
+cached consensus will never be served as a response to a request
+for a consensus.</p>
+</div>
+<dl class="method">
+<dt id="bushel.downloader.DirectoryDownloader.directory_authorities">
+<code class="descname">directory_authorities</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#DirectoryDownloader.directory_authorities"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.DirectoryDownloader.directory_authorities" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a list containing either a <code class="xref py py-class docutils literal notranslate"><span class="pre">DirPort</span></code> or
+an <code class="xref py py-class docutils literal notranslate"><span class="pre">ORPort</span></code> for each of the directory authorities.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="bushel.downloader.DirectoryDownloader.directory_caches">
+<code class="descname">directory_caches</code><span class="sig-paren">(</span><em>extra_info=False</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#DirectoryDownloader.directory_caches"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.DirectoryDownloader.directory_caches" title="Permalink to this definition">¶</a></dt>
+<dd><p>Returns a list containing either a DirPort or an ORPort for
+each of the directory caches known from the latest consensus. If no
+consensus is known, this will return
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">authorities()</span></code> instead.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>extra_info</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Whether the list returned should contain only
+directory caches that cache extra-info
+descriptors.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="bushel.downloader.DirectoryDownloader.relay_extra_info_descriptors">
+<code class="descname">relay_extra_info_descriptors</code><span class="sig-paren">(</span><em>digests</em>, <em>published_hint=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#DirectoryDownloader.relay_extra_info_descriptors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.DirectoryDownloader.relay_extra_info_descriptors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves multiple extra-info descriptors from directory servers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>digests</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>)</em>) – Hex-encoded digests for the descriptors.</p></li>
+<li><p><strong>published_hint</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)"><em>datetime</em></a>) – Provides a hint on the
+published time. Currently this is unused, but is accepted for
+compatibility with other directory sources. In the future this may
+be used to avoid attempts to download descriptors that it is likely
+are long gone.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a> of
+<a class="reference external" href="https://stem.torproject.org/api/descriptor/extrainfo_descriptor.html#stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor" title="(in Stem v1.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor</span></code></a>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="bushel.downloader.DirectoryDownloader.relay_microdescriptors">
+<code class="descname">relay_microdescriptors</code><span class="sig-paren">(</span><em>microdescriptor_hashes</em>, <em>valid_after_hint=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#DirectoryDownloader.relay_microdescriptors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.DirectoryDownloader.relay_microdescriptors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves multiple server descriptors from directory servers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>hashes</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>)</em>) – base64-encoded hashes for the microdescriptors.</p></li>
+<li><p><strong>valid_after_hint</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)"><em>datetime</em></a>) – Provides a hint on the
+valid_after time. Currently this is unused, but is accepted for
+compatibility with other directory sources. In the future this may
+be used to avoid attempts to download descriptors that it is likely
+are long gone.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a> of
+<a class="reference external" href="https://stem.torproject.org/api/descriptor/microdescriptor.html#stem.descriptor.microdescriptor.Microdescriptor" title="(in Stem v1.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">stem.descriptor.microdescriptor.Microdescriptor</span></code></a>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="bushel.downloader.DirectoryDownloader.relay_server_descriptors">
+<code class="descname">relay_server_descriptors</code><span class="sig-paren">(</span><em>digests</em>, <em>published_hint=None</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#DirectoryDownloader.relay_server_descriptors"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.DirectoryDownloader.relay_server_descriptors" title="Permalink to this definition">¶</a></dt>
+<dd><p>Retrieves multiple server descriptors from directory servers.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>digests</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>)</em>) – Hex-encoded digests for the descriptors.</p></li>
+<li><p><strong>published_hint</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)"><em>datetime</em></a>) – Provides a hint on the
+published time. Currently this is unused, but is accepted for
+compatibility with other directory sources. In the future this may
+be used to avoid attempts to download descriptors that it is likely
+are long gone.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>A <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">list</span></code></a> of
+<a class="reference external" href="https://stem.torproject.org/api/descriptor/server_descriptor.html#stem.descriptor.server_descriptor.RelayDescriptor" title="(in Stem v1.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">stem.descriptor.server_descriptor.RelayDescriptor</span></code></a>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="function">
+<dt id="bushel.downloader.relay_extra_info_descriptors_query_path">
+<code class="descclassname">bushel.downloader.</code><code class="descname">relay_extra_info_descriptors_query_path</code><span class="sig-paren">(</span><em>digests</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#relay_extra_info_descriptors_query_path"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.relay_extra_info_descriptors_query_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a query path to request extra-info descriptors by digests
+from a directory server.  For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">digests</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;A94A07B201598D847105AE5FCD5BC3AB10124389&quot;</span><span class="p">,</span>
+<span class="gp">... </span>           <span class="s2">&quot;B38974987323394795879383ABEF4893BD4895A8&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">relay_extra_info_descriptors_query_path</span><span class="p">(</span><span class="n">digests</span><span class="p">)</span>  <span class="c1"># doctest: +ELLIPSIS</span>
+<span class="go">&#39;/tor/extra/d/A94A07B201598D847105...24389+B3897498732339479587...95A8&#39;</span>
+</pre></div>
+</div>
+<p>These query paths are defined in appendix B of <a class="reference internal" href="references.html#dir-spec" id="id3"><span>[dir-spec]</span></a>. By convention,
+these URLs use upper-case hex-encoded SHA-1 digests and so this function
+will ensure that digests are upper-case. Directory server implementations
+should not rely on this behaviour.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>digests</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>)</em>) – The hex-encoded SHA-1 digests for the
+descriptors.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Query path as a <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="bushel.downloader.relay_microdescriptors_query_path">
+<code class="descclassname">bushel.downloader.</code><code class="descname">relay_microdescriptors_query_path</code><span class="sig-paren">(</span><em>microdescriptor_hashes</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#relay_microdescriptors_query_path"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.relay_microdescriptors_query_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a query path to request microdescriptors by their hashes
+from a directory server.  For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">microdescriptor_hashes</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;Z62HG1C9PLIVs8jLi1guO48rzPdcq6tFTLi5s27Zy4U&quot;</span><span class="p">,</span>
+<span class="gp">... </span>                          <span class="s2">&quot;FkiLuQJe/Gqp4xsHfheh+G42TSJ77AarHOGrjazj0Q0&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">relay_microdescriptors_query_path</span><span class="p">(</span><span class="n">microdescriptor_hashes</span><span class="p">)</span>  <span class="c1"># doctest: +ELLIPSIS</span>
+<span class="go">&#39;/tor/micro/d/Z62HG1C9PLIVs8jL...Li5s27Zy4U-FkiLuQJe/Gqp4xsHf...rjazj0Q0&#39;</span>
+</pre></div>
+</div>
+<p>These query paths are defined in appendix B of <a class="reference internal" href="references.html#dir-spec" id="id4"><span>[dir-spec]</span></a>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>digests</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>)</em>) – The base64-encoded hashes for the descriptors.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Query path as a <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="bushel.downloader.relay_server_descriptors_query_path">
+<code class="descclassname">bushel.downloader.</code><code class="descname">relay_server_descriptors_query_path</code><span class="sig-paren">(</span><em>digests</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/bushel/downloader.html#relay_server_descriptors_query_path"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.downloader.relay_server_descriptors_query_path" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generates a query path to request server descriptors by digests from a
+directory server.  For example:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">digests</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;A94A07B201598D847105AE5FCD5BC3AB10124389&quot;</span><span class="p">,</span>
+<span class="gp">... </span>           <span class="s2">&quot;B38974987323394795879383ABEF4893BD4895A8&quot;</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">relay_server_descriptors_query_path</span><span class="p">(</span><span class="n">digests</span><span class="p">)</span>  <span class="c1"># doctest: +ELLIPSIS</span>
+<span class="go">&#39;/tor/server/d/A94A07B201598D847105...24389+B3897498732339479587...95A8&#39;</span>
+</pre></div>
+</div>
+<p>These query paths are defined in appendix B of <a class="reference internal" href="references.html#dir-spec" id="id5"><span>[dir-spec]</span></a>. By convention,
+these URLs use upper-case hex-encoded SHA-1 digests and so this function
+will ensure that digests are upper-case. Directory server implementations
+should not rely on this behaviour.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>digests</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>)</em>) – The hex-encoded SHA-1 digests for the
+descriptors.</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Query path as a <a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><code class="xref py py-class docutils literal notranslate"><span class="pre">str</span></code></a>.</p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="collector.html">CollecTor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory.html">Tor Directory Protocol</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="directory/voting.html" title="previous chapter">Directory Voting</a></li>
+      <li>Next: <a href="monitoring.html" title="next chapter">Monitoring</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/downloader.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

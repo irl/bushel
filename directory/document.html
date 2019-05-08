@@ -1,0 +1,560 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Directory Documents &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Detached Signatures" href="detached_signatures.html" />
+    <link rel="prev" title="Tor Directory Protocol" href="../directory.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-bushel.directory.document">
+<span id="directory-documents"></span><h1>Directory Documents<a class="headerlink" href="#module-bushel.directory.document" title="Permalink to this headline">¶</a></h1>
+<p>The <a class="reference internal" href="#module-bushel.directory.document" title="bushel.directory.document"><code class="xref py py-mod docutils literal notranslate"><span class="pre">bushel.directory.document</span></code></a> module provides base classes and utility
+methods for handling documents that implement the Tor directory protocol
+version 3 meta format (§1.2 <a class="reference internal" href="../references.html#dir-spec" id="id1"><span>[dir-spec]</span></a>).</p>
+<p>For specific document types, see:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="detached_signatures.html">Detached Signatures</a></li>
+<li class="toctree-l1"><a class="reference internal" href="network_status.html">Network Statuses</a></li>
+<li class="toctree-l1"><a class="reference internal" href="server_descriptor.html">Server Descriptors</a></li>
+<li class="toctree-l1"><a class="reference internal" href="extra_info_descriptor.html">Extra Info Descriptors</a></li>
+</ul>
+</div>
+<dl class="class">
+<dt id="bushel.directory.document.DirectoryCertificate">
+<em class="property">class </em><code class="descclassname">bushel.directory.document.</code><code class="descname">DirectoryCertificate</code><span class="sig-paren">(</span><em>raw_content</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryCertificate"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryCertificate" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Tor Ed25519 certificate as specified by <a class="reference internal" href="../references.html#cert-spec" id="id2"><span>[cert-spec]</span></a>. It is not the only
+certificate format that Tor uses. Typically these are found as the data
+contained within <a class="reference internal" href="#bushel.directory.document.DirectoryDocumentObject" title="bushel.directory.document.DirectoryDocumentObject"><code class="xref py py-class docutils literal notranslate"><span class="pre">DirectoryDocumentObject</span></code></a> s.</p>
+<div class="graphviz"><img src="../_images/graphviz-add0c6eda143ccb749c22d53cc814339f166d80a.png" alt="digraph g {
+    rankdir=LR;
+
+    certificate [label=&quot;Certificate&quot;,shape=&quot;box&quot;,style=&quot;filled&quot;,fillcolor=&quot;yellow&quot;];
+    extension [label=&quot;Extension&quot;,shape=&quot;box&quot;];
+
+    certificate-&gt;extension [label=&quot;has zero or more&quot;];
+}" class="graphviz" /></div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>raw_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – raw certificate contents</p>
+</dd>
+<dt class="field-even">Variables</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – raw certificate contents</p></li>
+<li><p><strong>version</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – version of the certificate format (currently always 1)</p></li>
+<li><p><strong>cert_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – type of certificate</p></li>
+<li><p><strong>expiration_date</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)"><em>datetime</em></a>) – expiration date of certificate</p></li>
+<li><p><strong>cert_key_type</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – type of certified key</p></li>
+<li><p><strong>certified_key</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – an Ed25519 public key if cert_key_type is 1, or a
+SHA256 hash of some other key type depending on
+the value of cert_key_type</p></li>
+<li><p><strong>n_extensions</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – declared number of extensions</p></li>
+<li><p><strong>extensions</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference internal" href="#bushel.directory.document.DirectoryCertificateExtension" title="bushel.directory.document.DirectoryCertificateExtension"><em>DirectoryCertificateExtension</em></a><em>)</em>) – parsed extensions</p></li>
+<li><p><strong>signature</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – certificate signature</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="method">
+<dt id="bushel.directory.document.DirectoryCertificate.is_valid">
+<code class="descname">is_valid</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryCertificate.is_valid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryCertificate.is_valid" title="Permalink to this definition">¶</a></dt>
+<dd><p>Checks that the certificate is valid. This is the counterpart to
+<a class="reference internal" href="#bushel.directory.document.DirectoryCertificate.verify" title="bushel.directory.document.DirectoryCertificate.verify"><code class="xref py py-meth docutils literal notranslate"><span class="pre">verify()</span></code></a> that checks that the certificate
+data conforms to the specification. The two checks performed are:</p>
+<ul class="simple">
+<li><p>expiration date is not passed</p></li>
+<li><p>there are no extensions that affect validation that we do not
+understand</p></li>
+</ul>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>In the Tor Metrics use case, we need to check that certificates
+were valid at the time they were expected to be valid, but
+the current API does not support this.</p>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="bushel.directory.document.DirectoryCertificate.parse">
+<code class="descname">parse</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryCertificate.parse"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryCertificate.parse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses the certificate to make the fields available via instance
+attributes. This does not validate or verify the certificate, but must
+be called before making calls to <a class="reference internal" href="#bushel.directory.document.DirectoryCertificate.is_valid" title="bushel.directory.document.DirectoryCertificate.is_valid"><code class="xref py py-meth docutils literal notranslate"><span class="pre">is_valid()</span></code></a>
+or <a class="reference internal" href="#bushel.directory.document.DirectoryCertificate.verify" title="bushel.directory.document.DirectoryCertificate.verify"><code class="xref py py-meth docutils literal notranslate"><span class="pre">verify()</span></code></a>.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="bushel.directory.document.DirectoryCertificate.verify">
+<code class="descname">verify</code><span class="sig-paren">(</span><em>verify_key_data=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryCertificate.verify"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryCertificate.verify" title="Permalink to this definition">¶</a></dt>
+<dd><p>Verify the certificate using the verification key. Optionally provide
+key material, otherwise the key found in the “signed-with-ed25519-key”
+(type 4) extension will be used.</p>
+<p>This only verifies the signature. To validate the certificate data
+the seperate <a class="reference internal" href="#bushel.directory.document.DirectoryCertificate.is_valid" title="bushel.directory.document.DirectoryCertificate.is_valid"><code class="xref py py-meth docutils literal notranslate"><span class="pre">DirectoryCertificate.is_valid()</span></code></a> method must be
+used.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>This verifies the raw data that the object was initialized with,
+the fields may have been played with since parsing and the parser
+may also have unknown bugs.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>verify_key_data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – an Ed25519 verification key</p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.document.DirectoryCertificateExtension">
+<em class="property">class </em><code class="descclassname">bushel.directory.document.</code><code class="descname">DirectoryCertificateExtension</code><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryCertificateExtension"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryCertificateExtension" title="Permalink to this definition">¶</a></dt>
+<dd><p>A Tor Ed25519 certificate extension as specified by <a class="reference internal" href="../references.html#cert-spec" id="id3"><span>[cert-spec]</span></a>.</p>
+<div class="graphviz"><img src="../_images/graphviz-67d4c63b3db2efbf84947a79a7d737efa27a5dfb.png" alt="digraph g {
+    rankdir=LR;
+
+    certificate [label=&quot;Certificate&quot;,shape=&quot;box&quot;];
+    extension [label=&quot;Extension&quot;,shape=&quot;box&quot;,style=&quot;filled&quot;,fillcolor=&quot;yellow&quot;];
+
+    certificate-&gt;extension [label=&quot;has zero or more&quot;];
+}" class="graphviz" /></div>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/functions.html#type" title="(in Python v3.7)"><strong>type</strong></a> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – extension type</p></li>
+<li><p><strong>flags</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – extension flags</p></li>
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – extension data</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p>These will be found in <a class="reference internal" href="#bushel.directory.document.DirectoryCertificate" title="bushel.directory.document.DirectoryCertificate"><code class="xref py py-class docutils literal notranslate"><span class="pre">DirectoryCertificate</span></code></a> s.</p>
+</div>
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.document.DirectoryDocument">
+<em class="property">class </em><code class="descclassname">bushel.directory.document.</code><code class="descname">DirectoryDocument</code><span class="sig-paren">(</span><em>raw_content</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryDocument"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryDocument" title="Permalink to this definition">¶</a></dt>
+<dd><p>A directory document as described in the Tor directory protocol meta
+format (§1.2 <a class="reference internal" href="../references.html#dir-spec" id="id4"><span>[dir-spec]</span></a>).</p>
+<div class="graphviz"><img src="../_images/graphviz-7521d856e620fa2e1f213b5078dc555e7f3989c8.png" alt="digraph g {
+    rankdir=LR;
+
+    document [label=&quot;Document&quot;,shape=&quot;box&quot;,style=&quot;filled&quot;,fillcolor=&quot;yellow&quot;];
+    item [label=&quot;Item&quot;,shape=&quot;box&quot;];
+    object [label=&quot;Object&quot;,shape=&quot;box&quot;];
+
+    document-&gt;item [label=&quot;has one or more&quot;];
+    item-&gt;object [label=&quot;has zero or more&quot;];
+}" class="graphviz" /></div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>raw_content</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – raw document contents</p>
+</dd>
+</dl>
+<dl class="method">
+<dt id="bushel.directory.document.DirectoryDocument.tokenize">
+<code class="descname">tokenize</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryDocument.tokenize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryDocument.tokenize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Tokenizes the document using the following tokens:</p>
+<table class="docutils align-center">
+<colgroup>
+<col style="width: 28%" />
+<col style="width: 60%" />
+<col style="width: 12%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Kind</p></th>
+<th class="head"><p>Matches on</p></th>
+<th class="head"><p>Value</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>END</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;-----END</span> <span class="pre">&quot;</span> <span class="pre">Keyword</span> <span class="pre">&quot;-----&quot;</span></code></p></td>
+<td><p>Keyword</p></td>
+</tr>
+<tr class="row-odd"><td><p>BEGIN</p></td>
+<td><p><code class="docutils literal notranslate"><span class="pre">&quot;-----BEGIN</span> <span class="pre">&quot;</span> <span class="pre">Keyword</span> <span class="pre">&quot;-----&quot;</span></code></p></td>
+<td><p>Keyword</p></td>
+</tr>
+<tr class="row-even"><td><p>NL</p></td>
+<td><p>The ascii LF character (hex value 0x0a)</p></td>
+<td><p>Raw data</p></td>
+</tr>
+<tr class="row-odd"><td><p>PRINTABLE</p></td>
+<td><p>Printing, non-whitespace, UTF-8</p></td>
+<td><p>Raw data</p></td>
+</tr>
+<tr class="row-even"><td><p>WS</p></td>
+<td><p>Space or tab</p></td>
+<td><p>Raw data</p></td>
+</tr>
+<tr class="row-odd"><td><p>MISMATCH</p></td>
+<td><p>Anything else (likely binary nonsense)</p></td>
+<td><p>Raw data</p></td>
+</tr>
+</tbody>
+</table>
+<p>Note that these tokens do not match the non-terminals exactly as they
+are specified in the Tor directory protocol meta format. In particular,
+the PRINTABLE token is used for both keywords and arguments (and object
+data). It is up to whatever is processing these tokens to decide if
+something is valid keyword or argument.</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">document_bytes</span> <span class="o">=</span> <span class="sa">b</span><span class="s1">&#39;&#39;&#39;super-keyword 3</span>
+<span class="gp">... </span><span class="s1">onion-magic</span>
+<span class="gp">... </span><span class="s1">-----BEGIN ONION MAGIC-----</span>
+<span class="gp">... </span><span class="s1">AQQABp6MAT7yJjlcuWLDbr8A5J8YgyDh5SPYkLpj7fmcBaFbKekjAQAgBADKnR/C</span>
+<span class="gp">... </span><span class="s1">-----END ONION MAGIC-----</span>
+<span class="gp">... </span><span class="s1">&#39;&#39;&#39;</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="n">DirectoryDocument</span><span class="p">(</span><span class="n">document_bytes</span><span class="p">)</span><span class="o">.</span><span class="n">tokenize</span><span class="p">():</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="n">token</span><span class="p">)</span> <span class="c1"># doctest: +ELLIPSIS</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;PRINTABLE&#39;, value=&#39;super-keyword&#39;, line=1, column=0)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;WS&#39;, value=&#39; &#39;, line=1, column=13)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;PRINTABLE&#39;, value=&#39;3&#39;, line=1, column=14)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;NL&#39;, value=&#39;\n&#39;, line=1, column=15)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;PRINTABLE&#39;, value=&#39;onion-magic&#39;, line=2, column=0)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;NL&#39;, value=&#39;\n&#39;, line=2, column=11)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;BEGIN&#39;, value=&#39;ONION MAGIC&#39;, line=3, column=0)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;PRINTABLE&#39;, value=&#39;AQQ...DKnR/C&#39;, line=4, column=0)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;NL&#39;, value=&#39;\n&#39;, line=4, column=64)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;END&#39;, value=&#39;ONION MAGIC&#39;, line=5, column=0)</span>
+<span class="go">DirectoryDocumentToken(kind=&#39;EOF&#39;, value=None, line=6, column=0)</span>
+</pre></div>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>iterator for <a class="reference internal" href="#bushel.directory.document.DirectoryDocumentToken" title="bushel.directory.document.DirectoryDocumentToken"><code class="xref py py-class docutils literal notranslate"><span class="pre">DirectoryDocumentToken</span></code></a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.document.DirectoryDocumentItem">
+<em class="property">class </em><code class="descclassname">bushel.directory.document.</code><code class="descname">DirectoryDocumentItem</code><span class="sig-paren">(</span><em>keyword</em>, <em>arguments</em>, <em>objects</em>, <em>errors</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryDocumentItem"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryDocumentItem" title="Permalink to this definition">¶</a></dt>
+<dd><p>A directory document item as described in the Tor directory protocol meta
+format (§1.2 <a class="reference internal" href="../references.html#dir-spec" id="id5"><span>[dir-spec]</span></a>).</p>
+<div class="graphviz"><img src="../_images/graphviz-82a96f6ae87a7c1f8e665137c831bf254d82754d.png" alt="digraph g {
+    rankdir=LR;
+
+    document [label=&quot;Document&quot;,shape=&quot;box&quot;];
+    item [label=&quot;Item&quot;,style=&quot;filled&quot;,fillcolor=&quot;yellow&quot;,shape=&quot;box&quot;];
+    object [label=&quot;Object&quot;,shape=&quot;box&quot;];
+
+    document-&gt;item [label=&quot;has one or more&quot;];
+    item-&gt;object [label=&quot;has zero or more&quot;];
+}" class="graphviz" /></div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>keyword</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – the item keyword</p></li>
+<li><p><strong>arguments</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a><em>)</em>) – list of item arguments</p></li>
+<li><p><strong>objects</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.7)"><em>tuple</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a><em>,</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a><em>)</em><em>)</em>) – list of item objects as tuples of (object keyword, decoded object data)</p></li>
+<li><p><strong>errors</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference internal" href="#bushel.directory.document.DirectoryDocumentItemError" title="bushel.directory.document.DirectoryDocumentItemError"><em>DirectoryDocumentItemError</em></a><em>)</em>) – list of errors found during item parsing</p></li>
+</ul>
+</dd>
+<dt class="field-even">Variables</dt>
+<dd class="field-even"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/keyword.html#module-keyword" title="(in Python v3.7)"><strong>keyword</strong></a> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – the item keyword</p></li>
+<li><p><strong>arguments</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a><em>)</em>) – list of item arguments</p></li>
+<li><p><strong>objects</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#tuple" title="(in Python v3.7)"><em>tuple</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a><em>,</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a><em>)</em><em>)</em>) – list of item objects as tuples of (object keyword, decoded object data)</p></li>
+<li><p><strong>errors</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference internal" href="#bushel.directory.document.DirectoryDocumentItemError" title="bushel.directory.document.DirectoryDocumentItemError"><em>DirectoryDocumentItemError</em></a><em>)</em>) – list of errors found during item parsing</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.document.DirectoryDocumentItemError">
+<em class="property">class </em><code class="descclassname">bushel.directory.document.</code><code class="descname">DirectoryDocumentItemError</code><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryDocumentItemError"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryDocumentItemError" title="Permalink to this definition">¶</a></dt>
+<dd><p>Enumeration of forgivable errors that may be encountered during itemization
+of a directory document.</p>
+<table class="docutils align-center">
+<colgroup>
+<col style="width: 40%" />
+<col style="width: 60%" />
+</colgroup>
+<thead>
+<tr class="row-odd"><th class="head"><p>Name</p></th>
+<th class="head"><p>Description</p></th>
+</tr>
+</thead>
+<tbody>
+<tr class="row-even"><td><p>TRAILING_WHITESPACE</p></td>
+<td><p>Trailing whitespace on KeywordLines
+<a class="reference external" href="https://bugs.torproject.org/30105">https://bugs.torproject.org/30105</a></p></td>
+</tr>
+</tbody>
+</table>
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.document.DirectoryDocumentItemizer">
+<em class="property">class </em><code class="descclassname">bushel.directory.document.</code><code class="descname">DirectoryDocumentItemizer</code><span class="sig-paren">(</span><em>allowed_errors=None</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryDocumentItemizer"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryDocumentItemizer" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses <a class="reference internal" href="#bushel.directory.document.DirectoryDocumentToken" title="bushel.directory.document.DirectoryDocumentToken"><code class="xref py py-class docutils literal notranslate"><span class="pre">DirectoryDocumentToken</span></code></a> s into
+<a class="reference internal" href="#bushel.directory.document.DirectoryDocumentItem" title="bushel.directory.document.DirectoryDocumentItem"><code class="xref py py-class docutils literal notranslate"><span class="pre">DirectoryDocumentItem</span></code></a> s. By default this is a strict
+implementation of the Tor directory protocol meta format (§1.2
+<a class="reference internal" href="../references.html#dir-spec" id="id6"><span>[dir-spec]</span></a>), but this can be relaxed to account for implementation bugs in
+known Tor implementations.</p>
+<p>Items are produced by processing tokens according to a state machine:</p>
+<div class="graphviz"><img src="../_images/graphviz-54b68a17a6a6fbdfb3483f8adf31c4dde93493cd.png" alt="digraph g {
+    start [label=&quot;START&quot;];
+    keyword_line [label=&quot;KEYWORD-LINE&quot;];
+    keyword_line_ws [label=&quot;KEYWORD-LINE-WS&quot;];
+    keyword_line_end [label=&quot;KEYWORD-LINE-END&quot;];
+    object_data [label=&quot;OBJECT-DATA&quot;];
+    object_data_eol [label=&quot;OBJECT-DATA-EOL&quot;];
+
+    start -&gt; keyword_line [label=&quot;PRINATABLE&quot;];
+    keyword_line -&gt; keyword_line_end [label=&quot;NL&quot;];
+    keyword_line -&gt; keyword_line_ws [label=&quot;WS&quot;];
+    keyword_line_ws -&gt; keyword_line [label=&quot;PRINTABLE&quot;];
+    keyword_line_ws -&gt; keyword_line_end [label=&quot;NL&quot;, color=&quot;red&quot;];
+    keyword_line_end -&gt; object_data [label=&quot;BEGIN&quot;];
+    keyword_line_end -&gt; start [label=&quot;EOF&quot;];
+    keyword_line_end -&gt; keyword_line [label=&quot;PRINTABLE&quot;];
+    object_data -&gt; object_data_eol [label=&quot;PRINTABLE&quot;];
+    object_data_eol -&gt; object_data [label=&quot;NL&quot;];
+    object_data -&gt; keyword_line_end [label=&quot;END&quot;];
+}" class="graphviz" /></div>
+<p>State transitions shown in red would ideally not be needed as they are
+protocol violations, but implementations of the protocol exist that produce
+documents requiring these transitions and we need to be bug compatible.</p>
+<div class="admonition warning">
+<p class="admonition-title">Warning</p>
+<p>All printable strings are treated equally right now, so we’re not
+testing for keywords being the restricted set, nor are we decoding
+object data yet.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>allowed_errors</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference internal" href="#bushel.directory.document.DirectoryDocumentItemError" title="bushel.directory.document.DirectoryDocumentItemError"><em>DirectoryDocumentItemError</em></a><em>)</em>) – A list of errors that will be considered non-fatal during itemization.</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.document.DirectoryDocumentObject">
+<em class="property">class </em><code class="descclassname">bushel.directory.document.</code><code class="descname">DirectoryDocumentObject</code><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryDocumentObject"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryDocumentObject" title="Permalink to this definition">¶</a></dt>
+<dd><p>A directory document item as described in the Tor directory protocol meta
+format (§1.2 <a class="reference internal" href="../references.html#dir-spec" id="id7"><span>[dir-spec]</span></a>).</p>
+<div class="graphviz"><img src="../_images/graphviz-a8c7a9719f78ee303451d916ee3e5a920a7cf4f9.png" alt="digraph g {
+    rankdir=LR;
+
+    document [label=&quot;Document&quot;,shape=&quot;box&quot;];
+    item [label=&quot;Item&quot;,shape=&quot;box&quot;];
+    object [label=&quot;Object&quot;,shape=&quot;box&quot;,style=&quot;filled&quot;,fillcolor=&quot;yellow&quot;];
+
+    document-&gt;item [label=&quot;has one or more&quot;];
+    item-&gt;object [label=&quot;has zero or more&quot;];
+}" class="graphviz" /></div>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><a class="reference external" href="https://docs.python.org/3/library/keyword.html#module-keyword" title="(in Python v3.7)"><strong>keyword</strong></a> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – object keyword</p></li>
+<li><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – decoded object data</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.document.DirectoryDocumentToken">
+<em class="property">class </em><code class="descclassname">bushel.directory.document.</code><code class="descname">DirectoryDocumentToken</code><a class="reference internal" href="../_modules/bushel/directory/document.html#DirectoryDocumentToken"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.DirectoryDocumentToken" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>kind</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – the kind of token</p></li>
+<li><p><strong>value</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – kind-dependent value</p></li>
+<li><p><strong>line</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – line number</p></li>
+<li><p><strong>column</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – column number</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="bushel.directory.document.decode_object_data">
+<code class="descclassname">bushel.directory.document.</code><code class="descname">decode_object_data</code><span class="sig-paren">(</span><em>lines</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#decode_object_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.decode_object_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Decodes the base64 encoded data found within directory document objects.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>lines</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>)</em>) – the lines as found in a directory document object, not including
+newlines or the begin/end lines</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the decoded data</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)">bytes</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="bushel.directory.document.encode_object_data">
+<code class="descclassname">bushel.directory.document.</code><code class="descname">encode_object_data</code><span class="sig-paren">(</span><em>data</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#encode_object_data"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.encode_object_data" title="Permalink to this definition">¶</a></dt>
+<dd><p>Encodes bytes using base64 and wraps the lines at 64 charachters.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>data</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – the data to be encoded</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the line-wrapped base64 encoded data as a list of strings, one string
+per line</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)">list</a>(<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)">str</a>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="function">
+<dt id="bushel.directory.document.parse_timestamp">
+<code class="descclassname">bushel.directory.document.</code><code class="descname">parse_timestamp</code><span class="sig-paren">(</span><em>item</em>, <em>argindex=0</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/document.html#parse_timestamp"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.document.parse_timestamp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Parses a timestamp from a directory document’s item using the common format
+from <a class="reference internal" href="../references.html#dir-spec" id="id8"><span>[dir-spec]</span></a>. This format is not defined explicitly but is used with
+many keywords including <code class="docutils literal notranslate"><span class="pre">valid-after</span></code>, <code class="docutils literal notranslate"><span class="pre">fresh-until</span></code>, and
+<code class="docutils literal notranslate"><span class="pre">valid-until</span></code>.</p>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Due to the way the tokenizer works, timestamps are parsed as two
+arguments split by whitespace. This function takes this into account
+when parsing the timestamp.</p>
+</div>
+<p>Most items will have the timestamp as the first argument on the keyword
+line. At the time of writing, there are no keywords defined that expect
+timestamps at other indexes. Should this be required though, <em>argindex</em> may
+be used to parse a timestamp from a later argument.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>item</strong> (<a class="reference internal" href="#bushel.directory.document.DirectoryDocumentItem" title="bushel.directory.document.DirectoryDocumentItem"><em>DirectoryDocumentItem</em></a>) – the directory document item</p></li>
+<li><p><strong>argindex</strong> (<a class="reference external" href="https://docs.python.org/3/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – zero-indexed index of date portion of timestamp, the time portion is
+expected in <code class="docutils literal notranslate"><span class="pre">argindex+1</span></code></p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>the parsed timestamp</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)">datetime</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../collector.html">CollecTor</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../directory.html">Tor Directory Protocol</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Directory Documents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remote.html">Directory Client</a></li>
+<li class="toctree-l2"><a class="reference internal" href="voting.html">Directory Voting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../directory.html">Tor Directory Protocol</a><ul>
+      <li>Previous: <a href="../directory.html" title="previous chapter">Tor Directory Protocol</a></li>
+      <li>Next: <a href="detached_signatures.html" title="next chapter">Detached Signatures</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/directory/document.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

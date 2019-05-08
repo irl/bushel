@@ -1,0 +1,178 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>check_collector &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Plugin API" href="../plugins.html" />
+    <link rel="prev" title="Monitoring" href="../monitoring.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="check-collector">
+<h1>check_collector<a class="headerlink" href="#check-collector" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="check-a-collector-instance-for-operational-issues">
+<h2>Check a CollecTor instance for operational issues<a class="headerlink" href="#check-a-collector-instance-for-operational-issues" title="Permalink to this headline">¶</a></h2>
+<dl class="field-list simple">
+<dt class="field-odd">Manual section</dt>
+<dd class="field-odd"><p>1</p>
+</dd>
+</dl>
+<div class="section" id="synopsis">
+<h3>SYNOPSIS<a class="headerlink" href="#synopsis" title="Permalink to this headline">¶</a></h3>
+<blockquote>
+<div><p>check_collector hostname [module]</p>
+</div></blockquote>
+</div>
+<div class="section" id="description">
+<h3>DESCRIPTION<a class="headerlink" href="#description" title="Permalink to this headline">¶</a></h3>
+<p>Checks a CollecTor instance to ensure that the files it is serving are fresh.</p>
+<dl class="simple">
+<dt>hostname</dt><dd><p>The hostname of the CollecTor instance. There are no defaults to avoid
+implicit misconfiguration accidents. Example: “collector.torproject.org”.</p>
+</dd>
+<dt>module</dt><dd><p>The module to test. If not specified, the script will run through all
+available modules to make sure they are working. When configured for use with
+Nagios or compatible software this should be set to one of: “index”,
+“relaydescs”, “bridgedescs”, “exitlists”.</p>
+</dd>
+</dl>
+</div>
+<div class="section" id="examples">
+<h3>EXAMPLES<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h3>
+<p>Run all the checks on the command line to ensure the installation is working
+or to perform a one-off test of the Tor Metrics CollecTor instance:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">check_collector</span> <span class="n">collector</span><span class="o">.</span><span class="n">torproject</span><span class="o">.</span><span class="n">org</span>
+</pre></div>
+</div>
+<p>Check the Tor Metrics CollecTor instance to see that the relaydescs module has
+been running:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span><span class="n">check_collector</span> <span class="n">collector</span><span class="o">.</span><span class="n">torproject</span><span class="o">.</span><span class="n">org</span> <span class="n">relaydescs</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="bugs">
+<h3>BUGS<a class="headerlink" href="#bugs" title="Permalink to this headline">¶</a></h3>
+<ul class="simple">
+<li><p>bridgedescs module does not check network status document timestamps as the
+timestamp format is different</p></li>
+</ul>
+<p>Please report any bugs found to: <a class="reference external" href="https://github.com/irl/bushel/issues">https://github.com/irl/bushel/issues</a>.</p>
+</div>
+<div class="section" id="authors">
+<h3>AUTHORS<a class="headerlink" href="#authors" title="Permalink to this headline">¶</a></h3>
+<p>check_collector is part of bushel, a Python library and application supporting
+parts of Tor Metrics.</p>
+<p>check_collector and this man page were written by Iain Learmonth
+&lt;<a class="reference external" href="mailto:irl&#37;&#52;&#48;torproject&#46;org">irl<span>&#64;</span>torproject<span>&#46;</span>org</a>&gt;.</p>
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../collector.html">CollecTor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../directory.html">Tor Directory Protocol</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../monitoring.html">Monitoring</a><ul class="current">
+<li class="toctree-l2 current"><a class="current reference internal" href="#">check_collector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="../monitoring.html#module-bushel.monitoring">Monitoring Helpers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../monitoring.html">Monitoring</a><ul>
+      <li>Previous: <a href="../monitoring.html" title="previous chapter">Monitoring</a></li>
+      <li>Next: <a href="../plugins.html" title="next chapter">Plugin API</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/monitoring/check_collector.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

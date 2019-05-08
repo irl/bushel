@@ -1,0 +1,343 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>bushel.bandwidth.file &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for bushel.bandwidth.file</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">Bandwidth files.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="c1"># TODO: Write better docstring</span>
+
+<span class="kn">import</span> <span class="nn">base64</span>
+<span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">enum</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">re</span>
+<span class="kn">import</span> <span class="nn">textwrap</span>
+
+<span class="kn">import</span> <span class="nn">nacl.signing</span>
+<span class="kn">import</span> <span class="nn">nacl.encoding</span>
+
+<span class="kn">from</span> <span class="nn">bushel.document</span> <span class="k">import</span> <span class="n">BaseDocument</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;bushel&#39;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="BandwidthFileLineError"><a class="viewcode-back" href="../../../bandwidth/file.html#bushel.bandwidth.file.BandwidthFileLineError">[docs]</a><span class="k">class</span> <span class="nc">BandwidthFileLineError</span><span class="p">(</span><span class="n">enum</span><span class="o">.</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Enumeration of forgivable errors that may be encountered during parsing of</span>
+<span class="sd">    lines in a bandwidth file.</span>
+
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    Name                    Description</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    SHORT_TERMINATOR        A terminator with 4 `=` instead of 5.</span>
+<span class="sd">                            https://bugs.torproject.org/28379</span>
+<span class="sd">    NO_TERMINATOR           No terminator present, for pre-1.0.0 compatibility.</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">SHORT_TERMINATOR</span> <span class="o">=</span> <span class="s2">&quot;short-terminator&quot;</span></div>
+
+<div class="viewcode-block" id="BandwidthFileLiner"><a class="viewcode-back" href="../../../bandwidth/file.html#bushel.bandwidth.file.BandwidthFileLiner">[docs]</a><span class="k">class</span> <span class="nc">BandwidthFileLiner</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Parses :class:`BandwidthFileToken` s into :class:`BandwidthFileTimestamp`,</span>
+<span class="sd">    :class:`BandwidthFileHeaderLine` s and :class:`BandwidthFileRelayLine`. By</span>
+<span class="sd">    default this is a strict implementation of the Tor Bandwidth File</span>
+<span class="sd">    Specification version 1.4.0 [bandwidth-file-spec]_, but this can be relaxed</span>
+<span class="sd">    to account for parsing older versions, or for known bugs in Tor</span>
+<span class="sd">    implementations.</span>
+
+<span class="sd">    Lines are produced by processing tokens according to a state machine:</span>
+
+<span class="sd">    .. graphviz::</span>
+
+<span class="sd">        digraph g {</span>
+<span class="sd">            start [label=&quot;START&quot;];</span>
+<span class="sd">            timestamp [label=&quot;TIMESTAMP&quot;];</span>
+<span class="sd">            header_line [label=&quot;HEADER-LINE&quot;];</span>
+<span class="sd">            header_line_kv [label=&quot;HEADER-LINE-KV&quot;];</span>
+<span class="sd">            relay_line [label=&quot;RELAY-LINE&quot;];</span>
+<span class="sd">            relay_line_sp [label=&quot;RELAY-LINE-SP&quot;];</span>
+<span class="sd">            relay_line_kv [label=&quot;RELAY-LINE-KV&quot;];</span>
+<span class="sd">            done [label=&quot;DONE&quot;];</span>
+
+<span class="sd">            start -&gt; timestamp [label=&quot;TIMESTAMP&quot;];</span>
+<span class="sd">            timestamp -&gt; header_line [label=&quot;NL&quot;];</span>
+<span class="sd">            header_line -&gt; header_line_kv [label=&quot;KEYVALUE&quot;];</span>
+<span class="sd">            header_line_kv -&gt; header_line [label=&quot;NL&quot;];</span>
+<span class="sd">            header_line -&gt; relay_line [label=&quot;TERMINATOR&quot;];</span>
+<span class="sd">            header_line -&gt; relay_line [label=&quot;SHORT_TERMINATOR&quot;, color=&quot;red&quot;];</span>
+<span class="sd">            header_line_kv -&gt; relay_line_sp [label=&quot;SP&quot;, color=&quot;red&quot;];</span>
+<span class="sd">            relay_line -&gt; relay_line_kv [label=&quot;KEYVALUE&quot;];</span>
+<span class="sd">            relay_line_kv -&gt; relay_line [label=&quot;NL&quot;];</span>
+<span class="sd">            relay_line_kv -&gt; relay_line_sp [label=&quot;SP&quot;];</span>
+<span class="sd">            relay_line_sp -&gt; relay_line_kv [label=&quot;KEYVALUE&quot;];</span>
+<span class="sd">            relay_line -&gt; done [label=&quot;EOF&quot;];</span>
+<span class="sd">        }</span>
+
+<span class="sd">    State transitions shown in red would ideally not be needed as they are</span>
+<span class="sd">    protocol violations, but implementations of the protocol exist that produce</span>
+<span class="sd">    documents requiring these transitions and we need to be bug compatible.</span>
+
+<span class="sd">    :param allowed_errors:</span>
+<span class="sd">        A list of errors that will be considered non-fatal during itemization.</span>
+<span class="sd">    :type allowed_errors: list(BandwidthFileLineError)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">allowed_errors</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;START&#39;</span>
+
+    <span class="k">def</span> <span class="nf">eat</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">token</span><span class="p">):</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;START&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;TIMESTAMP&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;TIMESTAMP&#39;</span>
+                <span class="k">return</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">expected_not_found</span><span class="p">(</span><span class="s2">&quot;timestamp&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;TIMESTAMP&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;NL&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;HEADER-LINE&#39;</span>
+                <span class="k">return</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">expected_not_found</span><span class="p">(</span><span class="s2">&quot;newline&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;HEADER-LINE&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;KEYVALUE&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;HEADER-LINE-KV&#39;</span>
+                <span class="k">return</span>
+            <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;TERMINATOR&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;RELAY-LINE&#39;</span>
+                <span class="k">return</span>
+            <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;SHORT_TERMINATOR&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;RELAY-LINE&#39;</span>
+                <span class="c1"># TODO: this is an error</span>
+                <span class="k">return</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">expected_not_found</span><span class="p">(</span><span class="s2">&quot;terminator&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;HEADER-LINE-KV&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;NL&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;HEADER-LINE&#39;</span>
+                <span class="k">return</span>
+            <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;SP&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;RELAY-LINE-SP&#39;</span>
+                <span class="c1"># TODO: this is an error</span>
+                <span class="k">return</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">expected_not_found</span><span class="p">(</span><span class="s2">&quot;newline (or space if pre-1.0.0)&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;RELAY-LINE&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;KEYVALUE&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;RELAY-LINE-KV&#39;</span>
+                <span class="k">return</span>
+            <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;EOF&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;DONE&#39;</span>
+                <span class="k">return</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">expected_not_found</span><span class="p">(</span><span class="s2">&quot;keyvalue or eof&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;RELAY-LINE-KV&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;SP&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;RELAY-LINE-SP&#39;</span>
+                <span class="k">return</span>
+            <span class="k">elif</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;NL&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;RELAY-LINE&#39;</span>
+                <span class="k">return</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">expected_not_found</span><span class="p">(</span><span class="s2">&quot;space or newline&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">==</span> <span class="s1">&#39;RELAY-LINE-SP&#39;</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token</span><span class="o">.</span><span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;KEYVALUE&#39;</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">state</span> <span class="o">=</span> <span class="s1">&#39;RELAY-LINE-KV&#39;</span>
+                <span class="k">return</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">expected_not_found</span><span class="p">(</span><span class="s2">&quot;keyvalue&quot;</span><span class="p">)</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Bad state transition&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">error</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">error</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">error</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">allowed_errors</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">errors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">error</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Encountered a </span><span class="si">{error.value}</span><span class="s2"> error on line &quot;</span>
+                               <span class="n">f</span><span class="s2">&quot;</span><span class="si">{self.token.line}</span><span class="s2"> at col </span><span class="si">{self.token.column}</span><span class="s2">&quot;</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">expected_not_found</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">expected</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;Expected </span><span class="si">{expected}</span><span class="s2"> on line &quot;</span>
+                           <span class="n">f</span><span class="s2">&quot;</span><span class="si">{self.token.line}</span><span class="s2"> at &quot;</span>
+                           <span class="n">f</span><span class="s2">&quot;col </span><span class="si">{self.token.column}</span><span class="s2">, but found &quot;</span>
+                           <span class="n">f</span><span class="s2">&quot;</span><span class="si">{self.token.kind}</span><span class="s2"> </span><span class="si">{self.token.value}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+<span class="k">class</span> <span class="nc">BandwidthFile</span><span class="p">(</span><span class="n">BaseDocument</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw_content</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">raw_content</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">PARSE_FUNCTIONS</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">parse</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">lines</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">keyword</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">PARSE_FUNCTIONS</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">PARSE_FUNCTIONS</span><span class="p">[</span><span class="n">line</span><span class="o">.</span><span class="n">keyword</span><span class="p">](</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">lines</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">allowed_errors</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">liner</span> <span class="o">=</span> <span class="n">BandwidthFileLiner</span><span class="p">(</span><span class="n">allowed_errors</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">token</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">tokenize</span><span class="p">():</span>
+            <span class="n">line</span> <span class="o">=</span> <span class="n">liner</span><span class="o">.</span><span class="n">eat</span><span class="p">(</span><span class="n">token</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">line</span><span class="p">:</span>
+                <span class="k">yield</span> <span class="n">line</span>
+
+    <span class="k">def</span> <span class="nf">tokenize</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Tokenizes the document using the following tokens:</span>
+
+<span class="sd">        ================== ======================================= ========</span>
+<span class="sd">        Kind               Matches on                              Value</span>
+<span class="sd">        ================== ======================================= ========</span>
+<span class="sd">        TIMESTAMP          A string of ASCII numbers               Raw data</span>
+<span class="sd">        TERMINATOR         ``&quot;=====?\n&quot;``                          Raw data</span>
+<span class="sd">        KEYVALUE           ``Key &quot;=&quot; Value``                       Raw data</span>
+<span class="sd">        NL                 The ASCII LF character (hex value 0x0a) Raw data</span>
+<span class="sd">        SP                 The ASCII SP character (hex value 0x20) Raw data</span>
+<span class="sd">        MISMATCH           Anything else (likely binary nonsense)  Raw data</span>
+<span class="sd">        ================== ======================================= ========</span>
+
+<span class="sd">        Note that these tokens do not match the non-terminals exactly as they</span>
+<span class="sd">        are specified in the Tor Bandwidth File Format. In particular,</span>
+<span class="sd">        the PRINTABLE token is used for anything not a KEYVALUE but still</span>
+<span class="sd">        meaningful. It is up to whatever is processing these tokens to decide if</span>
+<span class="sd">        something is valid key, value, timestamp, etc.</span>
+
+<span class="sd">        :returns: iterator for :class:`BandwidthFileToken`</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">token_specification</span> <span class="o">=</span> <span class="p">[(</span><span class="s1">&#39;SHORT_TERMINATOR&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39;====\n&#39;</span><span class="p">),</span>
+                               <span class="p">(</span><span class="s1">&#39;TERMINATOR&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39;=====\n&#39;</span><span class="p">),</span>
+                               <span class="p">(</span><span class="s1">&#39;TIMESTAMP&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39;[0-9]+&#39;</span><span class="p">),</span>
+                               <span class="p">(</span><span class="s1">&#39;KEYVALUE&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39;[-A-Za-z0-9_]+=\S+&#39;</span><span class="p">),</span>
+                               <span class="p">(</span><span class="s1">&#39;NL&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39;\n&#39;</span><span class="p">),</span>
+                               <span class="p">(</span><span class="s1">&#39;SP&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39; &#39;</span><span class="p">),</span>
+                               <span class="p">(</span><span class="s1">&#39;MISMATCH&#39;</span><span class="p">,</span> <span class="sa">r</span><span class="s1">&#39;.&#39;</span><span class="p">)]</span>
+        <span class="n">tok_regex</span> <span class="o">=</span> <span class="s1">&#39;|&#39;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span>
+            <span class="s1">&#39;(?P&lt;</span><span class="si">%s</span><span class="s1">&gt;</span><span class="si">%s</span><span class="s1">)&#39;</span> <span class="o">%</span> <span class="n">pair</span> <span class="k">for</span> <span class="n">pair</span> <span class="ow">in</span> <span class="n">token_specification</span><span class="p">)</span>
+        <span class="n">line_num</span> <span class="o">=</span> <span class="mi">1</span>
+        <span class="n">line_start</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="k">for</span> <span class="n">mo</span> <span class="ow">in</span> <span class="n">re</span><span class="o">.</span><span class="n">finditer</span><span class="p">(</span><span class="n">tok_regex</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">raw_content</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;utf-8&#39;</span><span class="p">)):</span>
+            <span class="n">kind</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">lastgroup</span>
+            <span class="n">value</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">group</span><span class="p">()</span>
+            <span class="n">column</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">start</span><span class="p">()</span> <span class="o">-</span> <span class="n">line_start</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s1">&#39;MISMATCH&#39;</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                    <span class="n">f</span><span class="s1">&#39;</span><span class="si">{value!r}</span><span class="s1"> unexpected on line </span><span class="si">{line_num}</span><span class="s1"> at col </span><span class="si">{column}</span><span class="s1">&#39;</span><span class="p">)</span>
+            <span class="k">yield</span> <span class="n">BandwidthFileToken</span><span class="p">(</span><span class="n">kind</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">line_num</span><span class="p">,</span> <span class="n">column</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">kind</span> <span class="ow">in</span> <span class="p">[</span><span class="s1">&#39;NL&#39;</span><span class="p">,</span> <span class="s1">&#39;TERMINATOR&#39;</span><span class="p">]:</span>
+                <span class="n">line_start</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">end</span><span class="p">()</span>
+                <span class="n">line_num</span> <span class="o">+=</span> <span class="mi">1</span>
+        <span class="n">column</span> <span class="o">=</span> <span class="n">mo</span><span class="o">.</span><span class="n">end</span><span class="p">()</span> <span class="o">-</span> <span class="n">line_start</span>
+        <span class="k">yield</span> <span class="n">BandwidthFileToken</span><span class="p">(</span><span class="s1">&#39;EOF&#39;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">line_num</span><span class="p">,</span> <span class="n">column</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="BandwidthFileToken"><a class="viewcode-back" href="../../../bandwidth/file.html#bushel.bandwidth.file.BandwidthFileToken">[docs]</a><span class="k">class</span> <span class="nc">BandwidthFileToken</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;BandwidthFileToken&#39;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;kind&#39;</span><span class="p">,</span> <span class="s1">&#39;value&#39;</span><span class="p">,</span> <span class="s1">&#39;line&#39;</span><span class="p">,</span> <span class="s1">&#39;column&#39;</span><span class="p">])):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    :var str kind: the kind of token</span>
+<span class="sd">    :var bytes value: kind-dependent value</span>
+<span class="sd">    :var int line: line number</span>
+<span class="sd">    :var int column: column number</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../collector.html">CollecTor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../directory.html">Tor Directory Protocol</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,532 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>bushel.collector.filesystem &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for bushel.collector.filesystem</h1><div class="highlight"><pre>
+<span></span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">CollecTor Filesystem Protocol.</span>
+<span class="sd">&quot;&quot;&quot;</span>
+<span class="c1"># TODO: path.join implementation that uses either filesystem or web semantics</span>
+<span class="kn">import</span> <span class="nn">bz2</span>
+<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">enum</span>
+<span class="kn">import</span> <span class="nn">gzip</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">os</span>
+<span class="kn">import</span> <span class="nn">os.path</span>
+<span class="kn">import</span> <span class="nn">typing</span>
+<span class="kn">import</span> <span class="nn">lzma</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;bushel&#39;</span><span class="p">)</span>
+
+
+<div class="viewcode-block" id="CollecTorIndexCompression"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.CollecTorIndexCompression">[docs]</a><span class="k">class</span> <span class="nc">CollecTorIndexCompression</span><span class="p">(</span><span class="n">enum</span><span class="o">.</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Enumeration of supported compression types for CollecTor indexes.</span>
+
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    Name                    Description</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    UNCOMPRESSED            Uncompressed</span>
+<span class="sd">    BZ2                     bzip2</span>
+<span class="sd">    XZ                      xz</span>
+<span class="sd">    GZ                      gzip</span>
+<span class="sd">    ======================= ===========</span>
+
+<span class="sd">    :var str extension: Filename extension with leading dot (&quot;.&quot;).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">UNCOMPRESSED</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;uncompresed&quot;</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">x</span><span class="p">:</span> <span class="n">x</span><span class="p">)</span>
+    <span class="n">BZ2</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;bz2&quot;</span><span class="p">,</span> <span class="n">bz2</span><span class="o">.</span><span class="n">decompress</span><span class="p">)</span>
+    <span class="n">XZ</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;xz&quot;</span><span class="p">,</span> <span class="n">lzma</span><span class="o">.</span><span class="n">decompress</span><span class="p">)</span>
+    <span class="n">GZ</span> <span class="o">=</span> <span class="p">(</span><span class="s2">&quot;gz&quot;</span><span class="p">,</span> <span class="n">gzip</span><span class="o">.</span><span class="n">decompress</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">extension</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+                 <span class="n">decompress</span><span class="p">:</span> <span class="n">typing</span><span class="o">.</span><span class="n">Callable</span><span class="p">[[</span><span class="nb">bytes</span><span class="p">],</span> <span class="nb">bytes</span><span class="p">])</span> <span class="o">-&gt;</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">extension</span> <span class="o">!=</span> <span class="s2">&quot;uncompresed&quot;</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">extension</span> <span class="o">=</span> <span class="s2">&quot;.&quot;</span> <span class="o">+</span> <span class="n">extension</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">extension</span> <span class="o">=</span> <span class="s2">&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">decompress</span> <span class="o">=</span> <span class="n">decompress</span></div>
+
+
+<div class="viewcode-block" id="CollectorRecentSubdirectory"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.CollectorRecentSubdirectory">[docs]</a><span class="k">class</span> <span class="nc">CollectorRecentSubdirectory</span><span class="p">(</span><span class="n">enum</span><span class="o">.</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Enumeration of subdirectory names under the &quot;recent&quot; directory as specified</span>
+<span class="sd">    in §4.0 of [collector-protocol]_.</span>
+
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    Name                    Description</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    BRIDGE_DESCRIPTORS      Bridge descriptors (§4.2)</span>
+<span class="sd">    EXIT_LISTS              Exit lists (§4.1.1)</span>
+<span class="sd">    RELAY_DESCRIPTORS       Relay descriptors (§4.3)</span>
+<span class="sd">    TORPERF                 Torperf and Onionperf (§4.1.2)</span>
+<span class="sd">    WEBSTATS                Web server access logs (§4.4)</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">BRIDGE_DESCRIPTORS</span> <span class="o">=</span> <span class="s1">&#39;bridge-descriptors&#39;</span>
+    <span class="n">EXIT_LISTS</span> <span class="o">=</span> <span class="s1">&#39;exit-lists&#39;</span>
+    <span class="n">RELAY_DESCRIPTORS</span> <span class="o">=</span> <span class="s1">&#39;relay-descriptors&#39;</span>
+    <span class="n">TORPERF</span> <span class="o">=</span> <span class="s1">&#39;torperf&#39;</span>
+    <span class="n">WEBSTATS</span> <span class="o">=</span> <span class="s1">&#39;webstats&#39;</span></div>
+
+
+<div class="viewcode-block" id="CollectorOutSubdirectory"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.CollectorOutSubdirectory">[docs]</a><span class="k">class</span> <span class="nc">CollectorOutSubdirectory</span><span class="p">(</span><span class="n">enum</span><span class="o">.</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Enumeration of subdirectory names under the &quot;out&quot; directory as specified in</span>
+<span class="sd">    §5.0 of [collector-protocol]_.</span>
+
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    Name                    Description</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    BRIDGE_DESCRIPTORS      Bridge descriptors (§5.2)</span>
+<span class="sd">    EXIT_LISTS              Exit lists (§5.1)</span>
+<span class="sd">    RELAY_DESCRIPTORS       Relay descriptors (§5.3)</span>
+<span class="sd">    TORPERF                 Torperf and Onionperf (§5.1)</span>
+<span class="sd">    WEBSTATS                Web server access logs (§5.4)</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">BRIDGE_DESCRIPTORS</span> <span class="o">=</span> <span class="s1">&#39;bridge-descriptors&#39;</span>
+    <span class="n">EXIT_LISTS</span> <span class="o">=</span> <span class="s1">&#39;exit-lists&#39;</span>
+    <span class="n">RELAY_DESCRIPTORS</span> <span class="o">=</span> <span class="s1">&#39;relay-descriptors&#39;</span>
+    <span class="n">TORPERF</span> <span class="o">=</span> <span class="s1">&#39;torperf&#39;</span>
+    <span class="n">WEBSTATS</span> <span class="o">=</span> <span class="s1">&#39;webstats&#39;</span></div>
+
+
+<div class="viewcode-block" id="CollectorOutRelayDescsMarker"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.CollectorOutRelayDescsMarker">[docs]</a><span class="k">class</span> <span class="nc">CollectorOutRelayDescsMarker</span><span class="p">(</span><span class="n">enum</span><span class="o">.</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Enumeration of marker names under the &quot;relay-descriptors&quot; directory as</span>
+<span class="sd">    specified in §5.3 of [collector-protocol]_.</span>
+
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    Name                    Description</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    CONSENSUS               Network status consensuses (§5.3.2)</span>
+<span class="sd">    EXTRA_INFO              Relay extra-info descriptors (§5.3.2)</span>
+<span class="sd">    SERVER_DESCRIPTOR       Relay server descriptors (§5.3.2)</span>
+<span class="sd">    VOTE                    Network status votes (§5.3.2)</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">CONSENSUS</span> <span class="o">=</span> <span class="s1">&#39;consensus&#39;</span>
+    <span class="n">EXTRA_INFO</span> <span class="o">=</span> <span class="s1">&#39;extra-info&#39;</span>
+    <span class="n">MICRODESC</span> <span class="o">=</span> <span class="s1">&#39;microdesc&#39;</span>
+    <span class="n">SERVER_DESCRIPTOR</span> <span class="o">=</span> <span class="s1">&#39;server-descriptor&#39;</span>
+    <span class="n">VOTE</span> <span class="o">=</span> <span class="s1">&#39;vote&#39;</span></div>
+
+
+<div class="viewcode-block" id="CollectorOutBridgeDescsMarker"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.CollectorOutBridgeDescsMarker">[docs]</a><span class="k">class</span> <span class="nc">CollectorOutBridgeDescsMarker</span><span class="p">(</span><span class="n">enum</span><span class="o">.</span><span class="n">Enum</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Enumeration of marker names under the &quot;bridge-descriptors&quot; directory as</span>
+<span class="sd">    specified in §5.2 of [collector-protocol]_.</span>
+
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    Name                    Description</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    EXTRA_INFO              Bridge extra-info descriptors (§5.2.1)</span>
+<span class="sd">    SERVER_DESCRIPTOR       Bridge server descriptors (§5.2.1)</span>
+<span class="sd">    STATUS                  Bridge statuses (§5.2.2)</span>
+<span class="sd">    ======================= ===========</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">EXTRA_INFO</span> <span class="o">=</span> <span class="s1">&#39;extra-info&#39;</span>
+    <span class="n">SERVER_DESCRIPTOR</span> <span class="o">=</span> <span class="s1">&#39;server-descriptor&#39;</span>
+    <span class="n">STATUSES</span> <span class="o">=</span> <span class="s1">&#39;statuses&#39;</span></div>
+
+
+<span class="n">CollectorOutMarkerT</span> <span class="o">=</span> <span class="n">typing</span><span class="o">.</span><span class="n">Union</span><span class="p">[</span><span class="n">CollectorOutRelayDescsMarker</span><span class="p">,</span>
+                                   <span class="n">CollectorOutBridgeDescsMarker</span><span class="p">]</span>
+
+
+<div class="viewcode-block" id="collector_index_path"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_index_path">[docs]</a><span class="k">def</span> <span class="nf">collector_index_path</span><span class="p">(</span><span class="n">compression</span><span class="p">:</span> <span class="n">CollecTorIndexCompression</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a path to the CollecTor index file, using the specified compression</span>
+<span class="sd">    algorithm.</span>
+
+<span class="sd">    :param CollecTorIndexCompression compression: Compression algorithm to use.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;index/index.json&quot;</span> <span class="o">+</span> <span class="n">compression</span><span class="o">.</span><span class="n">extension</span></div>
+
+
+<div class="viewcode-block" id="collector_422_filename"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_422_filename">[docs]</a><span class="k">def</span> <span class="nf">collector_422_filename</span><span class="p">(</span><span class="n">valid_after</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span>
+                           <span class="n">fingerprint</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a filename for a bridge status according to §4.2.2 of the</span>
+<span class="sd">    [collector-protocol]_. For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; fingerprint = &quot;BA44A889E64B93FAA2B114E02C2A279A8555C533&quot; # Serge</span>
+<span class="sd">    &gt;&gt;&gt; collector_422_filename(valid_after, fingerprint)</span>
+<span class="sd">    &#39;20181119-150000-BA44A889E64B93FAA2B114E02C2A279A8555C533&#39;</span>
+
+<span class="sd">    :param ~datetime.datetime valid_after: The valid-after time.</span>
+<span class="sd">    :param str fingerprint: The fingerprint of the bridge authority.</span>
+
+<span class="sd">    :returns: Filename as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">fingerprint</span> <span class="o">=</span> <span class="n">fingerprint</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.year}{valid_after.month:02d}</span><span class="s2">&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.day:02d}</span><span class="s2">-</span><span class="si">{valid_after.hour:02d}</span><span class="s2">&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.minute:02d}{valid_after.second:02d}</span><span class="s2">&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;-</span><span class="si">{fingerprint}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_431_filename"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_431_filename">[docs]</a><span class="k">def</span> <span class="nf">collector_431_filename</span><span class="p">(</span><span class="n">valid_after</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a filename for a network status consensus according to §4.3.1 of the</span>
+<span class="sd">    [collector-protocol]_. For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; collector_431_filename(valid_after)</span>
+<span class="sd">    &#39;2018-11-19-15-00-00-consensus&#39;</span>
+
+<span class="sd">    :param ~datetime.datetime valid_after: The valid-after time.</span>
+
+<span class="sd">    :returns: Filename as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.year}</span><span class="s2">-</span><span class="si">{valid_after.month:02d}</span><span class="s2">-&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.day:02d}</span><span class="s2">-</span><span class="si">{valid_after.hour:02d}</span><span class="s2">-&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.minute:02d}</span><span class="s2">-</span><span class="si">{valid_after.second:02d}</span><span class="s2">-consensus&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_433_filename"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_433_filename">[docs]</a><span class="k">def</span> <span class="nf">collector_433_filename</span><span class="p">(</span><span class="n">valid_after</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span> <span class="n">v3ident</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+                           <span class="n">digest</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a filename for a network status vote according to §4.3.3 of the</span>
+<span class="sd">    [collector-protocol]_.</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; v3ident = &quot;D586D18309DED4CD6D57C18FDB97EFA96D330566&quot;  # moria1</span>
+<span class="sd">    &gt;&gt;&gt; digest = &quot;663B503182575D242B9D8A67334365FF8ECB53BB&quot;</span>
+<span class="sd">    &gt;&gt;&gt; collector_433_filename(valid_after, v3ident, digest)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;2018-11-19-15-00-00-vote-D586D18309DED4CD6D57C18FDB97EFA96D330566-663B...3BB&#39;</span>
+
+<span class="sd">    Paths in the Collector File Structure Protocol using this filename expect</span>
+<span class="sd">    *upper-case* hex-encoded SHA-1 digests.</span>
+
+<span class="sd">    &gt;&gt;&gt; v3ident = &quot;d586d18309ded4cd6d57c18fdb97efa96d330566&quot;  # Lower case gets corrected</span>
+<span class="sd">    &gt;&gt;&gt; digest = &quot;663b503182575d242b9d8a67334365ff8ecb53bb&quot;  # Lower case gets corrected</span>
+<span class="sd">    &gt;&gt;&gt; collector_433_filename(valid_after, v3ident, digest)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;2018-11-19-15-00-00-vote-D586D18309DED4CD6D57C18FDB97EFA96D330566-663B...3BB&#39;</span>
+
+<span class="sd">    :param ~datetime.datetime valid_after: The valid-after time.</span>
+<span class="sd">    :param str v3ident: The v3ident of the directory authority.</span>
+<span class="sd">    :param str digest: The digest of the vote.</span>
+
+<span class="sd">    :returns: Filename as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">v3ident</span> <span class="o">=</span> <span class="n">v3ident</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">digest</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.year}</span><span class="s2">-</span><span class="si">{valid_after.month:02d}</span><span class="s2">-&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.day:02d}</span><span class="s2">-</span><span class="si">{valid_after.hour:02d}</span><span class="s2">-&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.minute:02d}</span><span class="s2">-</span><span class="si">{valid_after.second:02d}</span><span class="s2">-vote-&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{v3ident}</span><span class="s2">-</span><span class="si">{digest}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_434_filename"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_434_filename">[docs]</a><span class="k">def</span> <span class="nf">collector_434_filename</span><span class="p">(</span><span class="n">valid_after</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a filename for a microdesc-flavoured network status consensus</span>
+<span class="sd">    according to §4.3.4 of the [collector-protocol]_. For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; collector_434_filename(valid_after)</span>
+<span class="sd">    &#39;2018-11-19-15-00-00-consensus-microdesc&#39;</span>
+
+<span class="sd">    :param ~datetime.datetime valid_after: The valid-after time.</span>
+
+<span class="sd">    :returns: Filename as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.year}</span><span class="s2">-</span><span class="si">{valid_after.month:02d}</span><span class="s2">-&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.day:02d}</span><span class="s2">-</span><span class="si">{valid_after.hour:02d}</span><span class="s2">-&quot;</span>
+            <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.minute:02d}</span><span class="s2">-</span><span class="si">{valid_after.second:02d}</span><span class="s2">-consensus-&quot;</span>
+            <span class="s2">&quot;microdesc&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_521_substructure"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_521_substructure">[docs]</a><span class="k">def</span> <span class="nf">collector_521_substructure</span><span class="p">(</span><span class="n">published</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span>
+                               <span class="n">digest</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a path substructure according to §5.2.1 of the</span>
+<span class="sd">    [collector-protocol]_. This is used for server-descriptors and extra-info</span>
+<span class="sd">    descriptors for both relays and bridges. For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; published = datetime.datetime(2018, 11, 19, 9, 17, 56)</span>
+<span class="sd">    &gt;&gt;&gt; digest = &quot;a94a07b201598d847105ae5fcd5bc3ab10124389&quot;</span>
+<span class="sd">    &gt;&gt;&gt; collector_521_substructure(published, digest)</span>
+<span class="sd">    &#39;2018/11/a/9&#39;</span>
+
+<span class="sd">    Paths in the Collector File Structure Protocol using this substructure</span>
+<span class="sd">    expect *lower-case* hex-encoded SHA-1 digests.</span>
+
+<span class="sd">    &gt;&gt;&gt; digest = &quot;A94A07B201598D847105AE5FCD5BC3AB10124389&quot; # Upper case gets corrected</span>
+<span class="sd">    &gt;&gt;&gt; collector_521_substructure(published, digest)</span>
+<span class="sd">    &#39;2018/11/a/9&#39;</span>
+
+<span class="sd">    :param ~datetime.datetime published: The published time.</span>
+<span class="sd">    :param str digest: The hex-encoded SHA-1 digest for the descriptor. The</span>
+<span class="sd">                       case will automatically be fixed to lower-case.</span>
+
+<span class="sd">    :returns: Path substructure as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">digest</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{published.year}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{published.month:02d}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">f</span><span class="s2">&quot;</span><span class="si">{digest[0]}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{digest[1]}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_521_path"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_521_path">[docs]</a><span class="k">def</span> <span class="nf">collector_521_path</span><span class="p">(</span><span class="n">subdirectory</span><span class="p">:</span> <span class="n">CollectorOutSubdirectory</span><span class="p">,</span>
+                       <span class="n">marker</span><span class="p">:</span> <span class="n">CollectorOutMarkerT</span><span class="p">,</span>
+                       <span class="n">published</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span> <span class="n">digest</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a path according to §5.2.1 of the [collector-protocol]_. This is</span>
+<span class="sd">    used for server-descriptors and extra-info descriptors for both relays and</span>
+<span class="sd">    bridges. For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; subdirectory = CollectorOutSubdirectory.RELAY_DESCRIPTORS</span>
+<span class="sd">    &gt;&gt;&gt; marker = CollectorOutRelayDescsMarker.SERVER_DESCRIPTOR</span>
+<span class="sd">    &gt;&gt;&gt; published = datetime.datetime(2018, 11, 19, 9, 17, 56)</span>
+<span class="sd">    &gt;&gt;&gt; digest = &quot;a94a07b201598d847105ae5fcd5bc3ab10124389&quot;</span>
+<span class="sd">    &gt;&gt;&gt; collector_521_path(subdirectory, marker, published, digest)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;relay-descriptors/server-descriptor/2018/11/a/9/a94a...389&#39;</span>
+
+<span class="sd">    Paths in the Collector File Structure Protocol using this substructure</span>
+<span class="sd">    expect *lower-case* hex-encoded SHA-1 digests.</span>
+
+<span class="sd">    &gt;&gt;&gt; digest = &quot;A94A07B201598D847105AE5FCD5BC3AB10124389&quot; # Upper case gets corrected</span>
+<span class="sd">    &gt;&gt;&gt; collector_521_path(subdirectory, marker, published, digest)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;relay-descriptors/server-descriptor/2018/11/a/9/a94a...389&#39;</span>
+
+<span class="sd">    :param str subdirectory: The subdirectory under the &quot;out&quot; directory to</span>
+<span class="sd">                             use. Standard values can be found in</span>
+<span class="sd">                             :py:data:`CollectorOutSubdirectory`.</span>
+<span class="sd">    :param str marker: The marker under the subdirectory to use. Standard values</span>
+<span class="sd">                       can be found in :class:`CollectorOutRelayDescsMarker`</span>
+<span class="sd">                       and :class:`CollectorOutBridgeDescsMarker`.</span>
+<span class="sd">    :param ~datetime.datetime published: The published time.</span>
+<span class="sd">    :param str digest: The hex-encoded SHA-1 digest for the descriptor. The</span>
+<span class="sd">                       case will automatically be fixed to lower-case.</span>
+
+<span class="sd">    :returns: Path for the descriptor as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">digest</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">subdirectory</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">marker</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                        <span class="n">collector_521_substructure</span><span class="p">(</span><span class="n">published</span><span class="p">,</span> <span class="n">digest</span><span class="p">),</span>
+                        <span class="n">f</span><span class="s2">&quot;</span><span class="si">{digest}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_522_substructure"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_522_substructure">[docs]</a><span class="k">def</span> <span class="nf">collector_522_substructure</span><span class="p">(</span><span class="n">valid_after</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a path substructure according to §5.2.2 of the</span>
+<span class="sd">    [collector-protocol]_. This is used for bridge statuses, and network-status</span>
+<span class="sd">    consensuses and votes. For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; collector_522_substructure(valid_after)</span>
+<span class="sd">    &#39;2018/11/19&#39;</span>
+
+<span class="sd">    :param ~datetime.datetime valid_after: The valid-after time.</span>
+
+<span class="sd">    :returns: Path substructure as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.year}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.month:02d}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.day:02d}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_522_path"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_522_path">[docs]</a><span class="k">def</span> <span class="nf">collector_522_path</span><span class="p">(</span><span class="n">subdirectory</span><span class="p">:</span> <span class="n">CollectorOutSubdirectory</span><span class="p">,</span>
+                       <span class="n">marker</span><span class="p">:</span> <span class="n">CollectorOutMarkerT</span><span class="p">,</span>
+                       <span class="n">valid_after</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span> <span class="n">filename</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a path according to §5.2.2 of the [collector-protocol]_. This is</span>
+<span class="sd">    used for bridge statuses, and network-status consensuses (both ns- and</span>
+<span class="sd">    microdesc- flavors) and votes. For a bridge status for example:</span>
+
+<span class="sd">    &gt;&gt;&gt; subdirectory = CollectorOutSubdirectory.BRIDGE_DESCRIPTORS</span>
+<span class="sd">    &gt;&gt;&gt; marker = CollectorOutBridgeDescsMarker.STATUSES</span>
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; fingerprint = &quot;BA44A889E64B93FAA2B114E02C2A279A8555C533&quot; # Serge</span>
+<span class="sd">    &gt;&gt;&gt; filename = collector_422_filename(valid_after, fingerprint)</span>
+<span class="sd">    &gt;&gt;&gt; collector_522_path(subdirectory, marker, valid_after, filename)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;bridge-descriptors/statuses/2018/11/19/20181119-150000-BA44...533&#39;</span>
+
+<span class="sd">    Or alternatively for a network-status consensus:</span>
+
+<span class="sd">    &gt;&gt;&gt; subdirectory = CollectorOutSubdirectory.RELAY_DESCRIPTORS</span>
+<span class="sd">    &gt;&gt;&gt; marker = CollectorOutRelayDescsMarker.CONSENSUS</span>
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; filename = collector_431_filename(valid_after)</span>
+<span class="sd">    &gt;&gt;&gt; collector_522_path(subdirectory, marker, valid_after, filename)</span>
+<span class="sd">    &#39;relay-descriptors/consensus/2018/11/19/2018-11-19-15-00-00-consensus&#39;</span>
+
+<span class="sd">    :param str subdirectory: The subdirectory under the &quot;out&quot; directory to</span>
+<span class="sd">                             use. Standard values can be found in</span>
+<span class="sd">                             :py:data:`CollectorOutSubdirectory`.</span>
+<span class="sd">    :param str marker: The marker under the subdirectory to use. Standard values</span>
+<span class="sd">                       can be found in :class:`CollectorOutRelayDescsMarker`</span>
+<span class="sd">                       and :class:`CollectorOutBridgeDescsMarker`.</span>
+<span class="sd">    :param ~datetime.datetime valid_after: The valid_after time.</span>
+<span class="sd">    :param str filename: The filename to use as a :py:class:`str`, typically</span>
+<span class="sd">                         created with :py:func:`collector_422_filename` for</span>
+<span class="sd">                         bridge statuses, :py:func:`collector_431_filename` for</span>
+<span class="sd">                         network-status consensuses, or</span>
+<span class="sd">                         :py:func:`collector_433_filename` for network-status</span>
+<span class="sd">                         votes.</span>
+
+<span class="sd">    :returns: Path for the descriptor as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">subdirectory</span><span class="o">.</span><span class="n">value</span><span class="p">,</span> <span class="n">marker</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                        <span class="n">collector_522_substructure</span><span class="p">(</span><span class="n">valid_after</span><span class="p">),</span> <span class="n">filename</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_533_substructure"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_533_substructure">[docs]</a><span class="k">def</span> <span class="nf">collector_533_substructure</span><span class="p">(</span><span class="n">valid_after</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a substructure according to §5.3.3 of the [collector-protocol]_.</span>
+<span class="sd">    This is used for microdesc-flavored consensuses and microdescriptors. For</span>
+<span class="sd">    example:</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; collector_533_substructure(valid_after)</span>
+<span class="sd">    &#39;2018/11&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.year}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.month:02d}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="collector_534_consensus_path"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_534_consensus_path">[docs]</a><span class="k">def</span> <span class="nf">collector_534_consensus_path</span><span class="p">(</span><span class="n">valid_after</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a path according to §5.3.4 of the [collector-protocol]_ for a</span>
+<span class="sd">    **microdesc-flavored** consensus. For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; collector_534_consensus_path(valid_after)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;relay-descriptors/microdesc/2018/11/consensus-microdesc/19/2018-11-1...sc&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">CollectorOutSubdirectory</span><span class="o">.</span><span class="n">RELAY_DESCRIPTORS</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                        <span class="n">CollectorOutRelayDescsMarker</span><span class="o">.</span><span class="n">MICRODESC</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                        <span class="n">collector_533_substructure</span><span class="p">(</span><span class="n">valid_after</span><span class="p">),</span>
+                        <span class="s2">&quot;consensus-microdesc&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{valid_after.day:02d}</span><span class="s2">&quot;</span><span class="p">,</span>
+                        <span class="n">collector_434_filename</span><span class="p">(</span><span class="n">valid_after</span><span class="p">))</span></div>
+
+
+<div class="viewcode-block" id="collector_534_microdescriptor_path"><a class="viewcode-back" href="../../../collector/filesystem.html#bushel.collector.filesystem.collector_534_microdescriptor_path">[docs]</a><span class="k">def</span> <span class="nf">collector_534_microdescriptor_path</span><span class="p">(</span><span class="n">valid_after</span><span class="p">:</span> <span class="n">datetime</span><span class="o">.</span><span class="n">datetime</span><span class="p">,</span>
+                                       <span class="n">digest</span><span class="p">:</span> <span class="nb">str</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">str</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Create a path according to §5.3.4 of the [collector-protocol]_ for a</span>
+<span class="sd">    microdescriptor. For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; digest = &quot;00d91cf96321fbd536dd07e297a5e1b7e6961ddd10facdd719716e351453168f&quot;</span>
+<span class="sd">    &gt;&gt;&gt; collector_534_microdescriptor_path(valid_after, digest)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;relay-descriptors/microdesc/2018/11/micro/0/0/00d...e351453168f&#39;</span>
+
+<span class="sd">    This path in the Collector File Structure Protocol using this substructure</span>
+<span class="sd">    expect *lower-case* hex-encoded SHA-256 digests.</span>
+
+<span class="sd">    &gt;&gt;&gt; valid_after = datetime.datetime(2018, 11, 19, 15)</span>
+<span class="sd">    &gt;&gt;&gt; digest = &quot;00D91CF96321FBD536DD07E297A5E1B7E6961DDD10FACDD719716E351453168F&quot;</span>
+<span class="sd">    &gt;&gt;&gt; collector_534_microdescriptor_path(valid_after, digest)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;relay-descriptors/microdesc/2018/11/micro/0/0/00d...e351453168f&#39;</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">digest</span> <span class="o">=</span> <span class="n">digest</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="k">return</span> <span class="n">os</span><span class="o">.</span><span class="n">path</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">CollectorOutSubdirectory</span><span class="o">.</span><span class="n">RELAY_DESCRIPTORS</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                        <span class="n">CollectorOutRelayDescsMarker</span><span class="o">.</span><span class="n">MICRODESC</span><span class="o">.</span><span class="n">value</span><span class="p">,</span>
+                        <span class="n">collector_533_substructure</span><span class="p">(</span><span class="n">valid_after</span><span class="p">),</span> <span class="s2">&quot;micro&quot;</span><span class="p">,</span>
+                        <span class="n">f</span><span class="s2">&quot;</span><span class="si">{digest[0]}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{digest[1]}</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">f</span><span class="s2">&quot;</span><span class="si">{digest}</span><span class="s2">&quot;</span><span class="p">)</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../collector.html">CollecTor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../directory.html">Tor Directory Protocol</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

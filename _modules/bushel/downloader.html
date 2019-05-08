@@ -1,0 +1,413 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>bushel.downloader &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../" src="../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../genindex.html" />
+    <link rel="search" title="Search" href="../../search.html" />
+   
+  <link rel="stylesheet" href="../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for bushel.downloader</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">asyncio</span>
+<span class="kn">import</span> <span class="nn">functools</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">random</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">urllib.error</span>
+<span class="kn">from</span> <span class="nn">itertools</span> <span class="k">import</span> <span class="n">chain</span>
+
+<span class="kn">import</span> <span class="nn">stem</span>
+<span class="kn">from</span> <span class="nn">stem</span> <span class="k">import</span> <span class="n">DirPort</span>
+<span class="kn">from</span> <span class="nn">stem.descriptor.remote</span> <span class="k">import</span> <span class="n">MAX_FINGERPRINTS</span>
+<span class="kn">from</span> <span class="nn">stem.descriptor.remote</span> <span class="k">import</span> <span class="n">MAX_MICRODESCRIPTOR_HASHES</span>
+<span class="kn">from</span> <span class="nn">stem.descriptor.remote</span> <span class="k">import</span> <span class="n">DescriptorDownloader</span>
+
+<span class="kn">from</span> <span class="nn">bushel</span> <span class="k">import</span> <span class="n">DIRECTORY_AUTHORITIES</span>
+<span class="kn">from</span> <span class="nn">bushel</span> <span class="k">import</span> <span class="n">LOCAL_DIRECTORY_CACHE</span>
+<span class="kn">from</span> <span class="nn">bushel</span> <span class="k">import</span> <span class="n">SERVER_DESCRIPTOR</span>
+<span class="kn">from</span> <span class="nn">bushel</span> <span class="k">import</span> <span class="n">DirectoryCacheMode</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s1">&#39;&#39;</span><span class="p">)</span>
+
+<span class="n">chunks</span> <span class="o">=</span> <span class="k">lambda</span> <span class="n">l</span><span class="p">,</span> <span class="n">n</span><span class="p">:</span> <span class="p">[</span><span class="n">l</span><span class="p">[</span><span class="n">i</span><span class="p">:</span><span class="n">i</span> <span class="o">+</span> <span class="n">n</span><span class="p">]</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="nb">len</span><span class="p">(</span><span class="n">l</span><span class="p">),</span> <span class="n">n</span><span class="p">)]</span>
+
+
+<div class="viewcode-block" id="relay_server_descriptors_query_path"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.relay_server_descriptors_query_path">[docs]</a><span class="k">def</span> <span class="nf">relay_server_descriptors_query_path</span><span class="p">(</span><span class="n">digests</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generates a query path to request server descriptors by digests from a</span>
+<span class="sd">    directory server.  For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; digests = [&quot;A94A07B201598D847105AE5FCD5BC3AB10124389&quot;,</span>
+<span class="sd">    ...            &quot;B38974987323394795879383ABEF4893BD4895A8&quot;]</span>
+<span class="sd">    &gt;&gt;&gt; relay_server_descriptors_query_path(digests)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;/tor/server/d/A94A07B201598D847105...24389+B3897498732339479587...95A8&#39;</span>
+
+<span class="sd">    These query paths are defined in appendix B of [dir-spec]_. By convention,</span>
+<span class="sd">    these URLs use upper-case hex-encoded SHA-1 digests and so this function</span>
+<span class="sd">    will ensure that digests are upper-case. Directory server implementations</span>
+<span class="sd">    should not rely on this behaviour.</span>
+
+<span class="sd">    :param list(str) digests: The hex-encoded SHA-1 digests for the</span>
+<span class="sd">                              descriptors.</span>
+
+<span class="sd">    :returns: Query path as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">digests</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">digests</span><span class="p">]</span>
+    <span class="k">return</span> <span class="s2">&quot;/tor/server/d/&quot;</span> <span class="o">+</span> <span class="s2">&quot;+&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">digests</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="relay_extra_info_descriptors_query_path"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.relay_extra_info_descriptors_query_path">[docs]</a><span class="k">def</span> <span class="nf">relay_extra_info_descriptors_query_path</span><span class="p">(</span><span class="n">digests</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generates a query path to request extra-info descriptors by digests</span>
+<span class="sd">    from a directory server.  For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; digests = [&quot;A94A07B201598D847105AE5FCD5BC3AB10124389&quot;,</span>
+<span class="sd">    ...            &quot;B38974987323394795879383ABEF4893BD4895A8&quot;]</span>
+<span class="sd">    &gt;&gt;&gt; relay_extra_info_descriptors_query_path(digests)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;/tor/extra/d/A94A07B201598D847105...24389+B3897498732339479587...95A8&#39;</span>
+
+<span class="sd">    These query paths are defined in appendix B of [dir-spec]_. By convention,</span>
+<span class="sd">    these URLs use upper-case hex-encoded SHA-1 digests and so this function</span>
+<span class="sd">    will ensure that digests are upper-case. Directory server implementations</span>
+<span class="sd">    should not rely on this behaviour.</span>
+
+<span class="sd">    :param list(str) digests: The hex-encoded SHA-1 digests for the</span>
+<span class="sd">                              descriptors.</span>
+
+<span class="sd">    :returns: Query path as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">digests</span> <span class="o">=</span> <span class="p">[</span><span class="n">d</span><span class="o">.</span><span class="n">upper</span><span class="p">()</span> <span class="k">for</span> <span class="n">d</span> <span class="ow">in</span> <span class="n">digests</span><span class="p">]</span>
+    <span class="k">return</span> <span class="s2">&quot;/tor/extra/d/&quot;</span> <span class="o">+</span> <span class="s2">&quot;+&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">digests</span><span class="p">)</span></div>
+
+<div class="viewcode-block" id="relay_microdescriptors_query_path"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.relay_microdescriptors_query_path">[docs]</a><span class="k">def</span> <span class="nf">relay_microdescriptors_query_path</span><span class="p">(</span><span class="n">microdescriptor_hashes</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Generates a query path to request microdescriptors by their hashes</span>
+<span class="sd">    from a directory server.  For example:</span>
+
+<span class="sd">    &gt;&gt;&gt; microdescriptor_hashes = [&quot;Z62HG1C9PLIVs8jLi1guO48rzPdcq6tFTLi5s27Zy4U&quot;,</span>
+<span class="sd">    ...                           &quot;FkiLuQJe/Gqp4xsHfheh+G42TSJ77AarHOGrjazj0Q0&quot;]</span>
+<span class="sd">    &gt;&gt;&gt; relay_microdescriptors_query_path(microdescriptor_hashes)  # doctest: +ELLIPSIS</span>
+<span class="sd">    &#39;/tor/micro/d/Z62HG1C9PLIVs8jL...Li5s27Zy4U-FkiLuQJe/Gqp4xsHf...rjazj0Q0&#39;</span>
+
+<span class="sd">    These query paths are defined in appendix B of [dir-spec]_.</span>
+
+<span class="sd">    :param list(str) digests: The base64-encoded hashes for the descriptors.</span>
+
+<span class="sd">    :returns: Query path as a :py:class:`str`.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="s2">&quot;/tor/micro/d/&quot;</span> <span class="o">+</span> <span class="s2">&quot;-&quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="n">microdescriptor_hashes</span><span class="p">)</span></div>
+
+
+<div class="viewcode-block" id="DirectoryDownloader"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.DirectoryDownloader">[docs]</a><span class="k">class</span> <span class="nc">DirectoryDownloader</span><span class="p">:</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    The :py:class:`DirectoryDownloader` provides an</span>
+<span class="sd">    :py:mod:`asyncio`-compatible wrapper around the stem</span>
+<span class="sd">    :py:class:`~stem.descriptor.remote.DescriptorDownloader`, with two modes of</span>
+<span class="sd">    operation:</span>
+
+<span class="sd">    * Directory Cache ([dir-spec]_ §4)</span>
+<span class="sd">    * Client ([dir-spec]_ §5)</span>
+
+<span class="sd">    The DirectoryDownloader will not initiate downloads on its own intiative.</span>
+<span class="sd">    It must be driven to perform downloads through the methods provided.</span>
+
+<span class="sd">    .. note:: As a valid consensus is required to implement parts of the</span>
+<span class="sd">              functionality, the latest consensus is cached internally. This</span>
+<span class="sd">              cached consensus should not be relied upon by external code. The</span>
+<span class="sd">              cached consensus will never be served as a response to a request</span>
+<span class="sd">              for a consensus.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                 <span class="n">initial_consensus</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">directory_cache_mode</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                 <span class="n">max_concurrency</span><span class="o">=</span><span class="mi">9</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">max_concurrency_lock</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">BoundedSemaphore</span><span class="p">(</span><span class="n">max_concurrency</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">current_consensus</span> <span class="o">=</span> <span class="n">initial_consensus</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">set_mode</span><span class="p">(</span><span class="n">directory_cache_mode</span>
+                      <span class="ow">or</span> <span class="n">DirectoryCacheMode</span><span class="o">.</span><span class="n">DIRECTORY_CACHE</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">downloader</span> <span class="o">=</span> <span class="n">DescriptorDownloader</span><span class="p">(</span>
+            <span class="n">timeout</span><span class="o">=</span><span class="mi">5</span><span class="p">,</span>
+            <span class="n">retries</span><span class="o">=</span><span class="mi">0</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">descriptor_cache</span> <span class="o">=</span> <span class="kc">None</span>
+
+    <span class="k">def</span> <span class="nf">set_mode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">directory_cache_mode</span><span class="p">):</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">directory_cache_mode</span><span class="p">,</span> <span class="n">DirectoryCacheMode</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">TypeError</span><span class="p">()</span>
+        <span class="k">if</span> <span class="n">directory_cache_mode</span> <span class="o">==</span> <span class="n">DirectoryCacheMode</span><span class="o">.</span><span class="n">DIRECTORY_CACHE</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">endpoints</span> <span class="o">=</span> \
+                <span class="bp">self</span><span class="o">.</span><span class="n">extra_info_endpoints</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">directory_authorities</span><span class="p">()</span>
+        <span class="k">elif</span> <span class="n">directory_cache_mode</span> <span class="o">==</span> <span class="n">DirectoryCacheMode</span><span class="o">.</span><span class="n">CLIENT</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">endpoints</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">directory_caches</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">extra_info_endpoints</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">directory_caches</span><span class="p">(</span><span class="n">extra_info</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">directory_cache_mode</span> <span class="o">==</span> <span class="n">DirectoryCacheMode</span><span class="o">.</span><span class="n">TESTING</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">endpoints</span> <span class="o">=</span> \
+                <span class="bp">self</span><span class="o">.</span><span class="n">extra_info_endpoints</span> <span class="o">=</span> <span class="p">[</span><span class="n">LOCAL_DIRECTORY_CACHE</span><span class="p">]</span>
+
+<div class="viewcode-block" id="DirectoryDownloader.directory_authorities"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.DirectoryDownloader.directory_authorities">[docs]</a>    <span class="k">def</span> <span class="nf">directory_authorities</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a list containing either a :py:class:`~stem.DirPort` or</span>
+<span class="sd">        an :py:class:`~stem.ORPort` for each of the directory authorities.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">dir_port</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">DIRECTORY_AUTHORITIES</span><span class="p">]</span></div>
+
+<div class="viewcode-block" id="DirectoryDownloader.directory_caches"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.DirectoryDownloader.directory_caches">[docs]</a>    <span class="k">def</span> <span class="nf">directory_caches</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">extra_info</span><span class="o">=</span><span class="kc">False</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a list containing either a DirPort or an ORPort for</span>
+<span class="sd">        each of the directory caches known from the latest consensus. If no</span>
+<span class="sd">        consensus is known, this will return</span>
+<span class="sd">        :py:meth:`~DirectoryDownloader.authorities()` instead.</span>
+
+<span class="sd">        :param bool extra_info: Whether the list returned should contain only</span>
+<span class="sd">                                directory caches that cache extra-info</span>
+<span class="sd">                                descriptors.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_consensus</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">or</span> \
+              <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_consensus</span><span class="o">.</span><span class="n">is_valid</span><span class="p">():</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="s2">&quot;Tried to use directory caches but we don&#39;t have a consensus&quot;</span><span class="p">)</span>
+            <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">directory_authorities</span><span class="p">()</span>
+        <span class="n">directory_caches</span> <span class="o">=</span> <span class="p">[</span><span class="n">a</span><span class="o">.</span><span class="n">dir_port</span> <span class="k">for</span> <span class="n">a</span> <span class="ow">in</span> <span class="n">DIRECTORY_AUTHORITIES</span><span class="p">]</span>
+        <span class="k">for</span> <span class="n">router</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">current_consensus</span><span class="o">.</span><span class="n">routers</span><span class="o">.</span><span class="n">values</span><span class="p">():</span>
+            <span class="k">if</span> <span class="n">extra_info</span> <span class="ow">and</span> <span class="bp">self</span><span class="o">.</span><span class="n">descriptor_cache</span><span class="p">:</span>
+                <span class="n">server_descriptor</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">descriptor_cache</span><span class="p">(</span>
+                    <span class="n">SERVER_DESCRIPTOR</span><span class="p">,</span> <span class="n">router</span><span class="o">.</span><span class="n">digest</span><span class="p">)</span>
+                <span class="k">if</span> <span class="p">(</span><span class="ow">not</span> <span class="n">server_descriptor</span><span class="p">)</span> <span class="ow">or</span> <span class="p">(</span>
+                        <span class="ow">not</span> <span class="n">server_descriptor</span><span class="o">.</span><span class="n">extra_info_cache</span><span class="p">):</span>
+                    <span class="k">continue</span>
+            <span class="k">if</span> <span class="n">stem</span><span class="o">.</span><span class="n">Flag</span><span class="o">.</span><span class="n">V2DIR</span> <span class="ow">in</span> <span class="n">router</span><span class="o">.</span><span class="n">flags</span> <span class="ow">and</span> <span class="n">router</span><span class="o">.</span><span class="n">dir_port</span><span class="p">:</span>  <span class="c1"># pylint: disable=no-member</span>
+                <span class="n">directory_caches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+                    <span class="n">DirPort</span><span class="p">(</span><span class="n">router</span><span class="o">.</span><span class="n">address</span><span class="p">,</span> <span class="n">router</span><span class="o">.</span><span class="n">dir_port</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">directory_caches</span></div>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_consensus_attempt</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flavor</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">):</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">downloader</span><span class="o">.</span><span class="n">query</span><span class="p">(</span>
+            <span class="n">f</span><span class="s2">&quot;/tor/status-vote/current/consensus-</span><span class="si">{flavor}</span><span class="s2">&quot;</span><span class="p">,</span>
+            <span class="n">document_handler</span><span class="o">=</span><span class="n">stem</span><span class="o">.</span><span class="n">descriptor</span><span class="o">.</span><span class="n">DocumentHandler</span><span class="o">.</span><span class="n">DOCUMENT</span><span class="p">,</span>  <span class="c1"># pylint: disable=no-member</span>
+            <span class="n">endpoints</span><span class="o">=</span><span class="p">[</span><span class="n">endpoint</span><span class="p">])</span>
+        <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_running_loop</span><span class="p">()</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">loop</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span>
+            <span class="kc">None</span><span class="p">,</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">run</span><span class="p">,</span> <span class="n">suppress</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+        <span class="k">for</span> <span class="n">consensus</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">current_consensus</span> <span class="o">=</span> <span class="n">consensus</span>
+            <span class="k">return</span> <span class="n">consensus</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">relay_consensus</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">flavor</span><span class="o">=</span><span class="s2">&quot;ns&quot;</span><span class="p">,</span> <span class="n">valid_after</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="p">,</span> <span class="n">endpoint</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="n">endpoints</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">endpoints</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">endpoints</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">endpoint</span> <span class="ow">in</span> <span class="n">endpoints</span><span class="p">:</span>
+            <span class="n">consensus</span> <span class="o">=</span> <span class="k">await</span> <span class="bp">self</span><span class="o">.</span><span class="n">_consensus_attempt</span><span class="p">(</span><span class="n">flavor</span><span class="p">,</span> <span class="n">endpoint</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">consensus</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">consensus</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">vote</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span>
+                   <span class="n">valid_after</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                   <span class="n">v3ident</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+                   <span class="n">digest</span><span class="o">=</span><span class="s2">&quot;*&quot;</span><span class="p">,</span>
+                   <span class="n">endpoint</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="k">if</span> <span class="n">digest</span> <span class="o">==</span> <span class="s2">&quot;*&quot;</span><span class="p">:</span>
+            <span class="n">url</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;/tor/status-vote/current/authority&quot;</span>
+            <span class="c1">#url = f&quot;/tor/status-vote/{&#39;next&#39; if next_vote else &#39;current&#39;}/authority&quot;</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">url</span> <span class="o">=</span> <span class="n">f</span><span class="s2">&quot;/tor/status-vote/current/d/</span><span class="si">{digest}</span><span class="s2">&quot;</span>
+        <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">downloader</span><span class="o">.</span><span class="n">query</span><span class="p">(</span>
+            <span class="n">url</span><span class="p">,</span>
+            <span class="n">document_handler</span><span class="o">=</span><span class="n">stem</span><span class="o">.</span><span class="n">descriptor</span><span class="o">.</span><span class="n">DocumentHandler</span><span class="o">.</span><span class="n">DOCUMENT</span><span class="p">,</span>  <span class="c1"># pylint: disable=no-member</span>
+            <span class="n">endpoints</span><span class="o">=</span><span class="p">[</span><span class="n">endpoint</span><span class="p">]</span> <span class="k">if</span> <span class="n">endpoint</span> <span class="k">else</span> <span class="bp">self</span><span class="o">.</span><span class="n">directory_authorities</span><span class="p">())</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Started consensus download&quot;</span><span class="p">)</span>
+        <span class="k">while</span> <span class="ow">not</span> <span class="n">query</span><span class="o">.</span><span class="n">is_done</span><span class="p">:</span>
+            <span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">sleep</span><span class="p">(</span><span class="mi">1</span><span class="p">)</span>
+        <span class="n">LOG</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;Vote download completed successfully&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">vote</span> <span class="ow">in</span> <span class="n">query</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">vote</span>
+
+    <span class="k">async</span> <span class="k">def</span> <span class="nf">_multiple_descriptors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">query_path_function</span><span class="p">,</span> <span class="n">digests</span><span class="p">,</span>
+                                    <span class="n">endpoints</span><span class="p">):</span>
+        <span class="n">loop</span> <span class="o">=</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">get_running_loop</span><span class="p">()</span>
+        <span class="n">descriptors</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="n">endpoints</span> <span class="o">=</span> <span class="n">endpoints</span><span class="o">.</span><span class="n">copy</span><span class="p">()</span>
+        <span class="n">random</span><span class="o">.</span><span class="n">shuffle</span><span class="p">(</span><span class="n">endpoints</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">endpoints</span> <span class="ow">and</span> <span class="n">digests</span><span class="p">:</span>
+            <span class="n">endpoint</span> <span class="o">=</span> <span class="n">endpoints</span><span class="o">.</span><span class="n">pop</span><span class="p">()</span>
+            <span class="k">async</span> <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">max_concurrency_lock</span><span class="p">:</span>
+                <span class="n">query</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">downloader</span><span class="o">.</span><span class="n">query</span><span class="p">(</span>
+                    <span class="n">query_path_function</span><span class="p">(</span><span class="n">digests</span><span class="p">),</span> <span class="n">endpoints</span><span class="o">=</span><span class="p">[</span><span class="n">endpoint</span><span class="p">])</span>
+                <span class="n">result</span> <span class="o">=</span> <span class="k">await</span> <span class="n">loop</span><span class="o">.</span><span class="n">run_in_executor</span><span class="p">(</span>
+                    <span class="kc">None</span><span class="p">,</span> <span class="n">functools</span><span class="o">.</span><span class="n">partial</span><span class="p">(</span><span class="n">query</span><span class="o">.</span><span class="n">run</span><span class="p">,</span> <span class="n">suppress</span><span class="o">=</span><span class="kc">True</span><span class="p">))</span>
+            <span class="k">for</span> <span class="n">descriptor</span> <span class="ow">in</span> <span class="n">result</span><span class="p">:</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">digests</span><span class="o">.</span><span class="n">remove</span><span class="p">(</span><span class="n">descriptor</span><span class="o">.</span><span class="n">digest</span><span class="p">())</span>
+                <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                    <span class="n">LOG</span><span class="o">.</span><span class="n">error</span><span class="p">(</span><span class="s2">&quot;I was given a descriptor I didn&#39;t ask for! This &quot;</span>
+                              <span class="s2">&quot;likely indicated a bug in the server we used.&quot;</span><span class="p">)</span>
+                <span class="n">descriptors</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">descriptor</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">digests</span><span class="p">:</span>
+            <span class="n">LOG</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="s2">&quot;Downloader failed to find descriptors: </span><span class="si">%s</span><span class="s2">.&quot;</span><span class="p">,</span>
+                        <span class="n">query_path_function</span><span class="p">(</span><span class="n">digests</span><span class="p">))</span>
+        <span class="k">return</span> <span class="n">descriptors</span>
+
+<div class="viewcode-block" id="DirectoryDownloader.relay_server_descriptors"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.DirectoryDownloader.relay_server_descriptors">[docs]</a>    <span class="k">async</span> <span class="k">def</span> <span class="nf">relay_server_descriptors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">digests</span><span class="p">,</span> <span class="n">published_hint</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieves multiple server descriptors from directory servers.</span>
+
+<span class="sd">        :param list(str) digests: Hex-encoded digests for the descriptors.</span>
+<span class="sd">        :param ~datetime.datetime published_hint: Provides a hint on the</span>
+<span class="sd">            published time. Currently this is unused, but is accepted for</span>
+<span class="sd">            compatibility with other directory sources. In the future this may</span>
+<span class="sd">            be used to avoid attempts to download descriptors that it is likely</span>
+<span class="sd">            are long gone.</span>
+
+<span class="sd">        :returns: A :py:class:`list` of</span>
+<span class="sd">                  :py:class:`stem.descriptor.server_descriptor.RelayDescriptor`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">batches</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">(</span><span class="n">digests</span><span class="p">,</span> <span class="n">MAX_FINGERPRINTS</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="o">*</span><span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_multiple_descriptors</span><span class="p">(</span><span class="n">relay_server_descriptors_query_path</span><span class="p">,</span>
+                                           <span class="n">batch</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">endpoints</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">batches</span>
+            <span class="p">])))</span></div>
+
+<div class="viewcode-block" id="DirectoryDownloader.relay_extra_info_descriptors"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.DirectoryDownloader.relay_extra_info_descriptors">[docs]</a>    <span class="k">async</span> <span class="k">def</span> <span class="nf">relay_extra_info_descriptors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">digests</span><span class="p">,</span> <span class="n">published_hint</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieves multiple extra-info descriptors from directory servers.</span>
+
+<span class="sd">        :param list(str) digests: Hex-encoded digests for the descriptors.</span>
+<span class="sd">        :param ~datetime.datetime published_hint: Provides a hint on the</span>
+<span class="sd">            published time. Currently this is unused, but is accepted for</span>
+<span class="sd">            compatibility with other directory sources. In the future this may</span>
+<span class="sd">            be used to avoid attempts to download descriptors that it is likely</span>
+<span class="sd">            are long gone.</span>
+
+<span class="sd">        :returns: A :py:class:`list` of</span>
+<span class="sd">                  :py:class:`stem.descriptor.extrainfo_descriptor.RelayExtraInfoDescriptor`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">batches</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">(</span><span class="n">digests</span><span class="p">,</span> <span class="n">MAX_FINGERPRINTS</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="o">*</span><span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_multiple_descriptors</span><span class="p">(</span>
+                    <span class="n">relay_extra_info_descriptors_query_path</span><span class="p">,</span> <span class="n">batch</span><span class="p">,</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">extra_info_endpoints</span><span class="p">)</span> <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">batches</span>
+            <span class="p">])))</span></div>
+
+<div class="viewcode-block" id="DirectoryDownloader.relay_microdescriptors"><a class="viewcode-back" href="../../downloader.html#bushel.downloader.DirectoryDownloader.relay_microdescriptors">[docs]</a>    <span class="k">async</span> <span class="k">def</span> <span class="nf">relay_microdescriptors</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">microdescriptor_hashes</span><span class="p">,</span> <span class="n">valid_after_hint</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Retrieves multiple server descriptors from directory servers.</span>
+
+<span class="sd">        :param list(str) hashes: base64-encoded hashes for the microdescriptors.</span>
+<span class="sd">        :param ~datetime.datetime valid_after_hint: Provides a hint on the</span>
+<span class="sd">            valid_after time. Currently this is unused, but is accepted for</span>
+<span class="sd">            compatibility with other directory sources. In the future this may</span>
+<span class="sd">            be used to avoid attempts to download descriptors that it is likely</span>
+<span class="sd">            are long gone.</span>
+
+<span class="sd">        :returns: A :py:class:`list` of</span>
+<span class="sd">                  :py:class:`stem.descriptor.microdescriptor.Microdescriptor`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">batches</span> <span class="o">=</span> <span class="n">chunks</span><span class="p">(</span><span class="n">microdescriptor_hashes</span><span class="p">,</span> <span class="n">MAX_MICRODESCRIPTOR_HASHES</span><span class="p">)</span>
+        <span class="k">return</span> <span class="nb">list</span><span class="p">(</span>
+            <span class="n">chain</span><span class="p">(</span><span class="o">*</span><span class="k">await</span> <span class="n">asyncio</span><span class="o">.</span><span class="n">gather</span><span class="p">(</span><span class="o">*</span><span class="p">[</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">_multiple_descriptors</span><span class="p">(</span><span class="n">relay_microdescriptors_query_path</span><span class="p">,</span>
+                                           <span class="n">batch</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">endpoints</span><span class="p">)</span>
+                <span class="k">for</span> <span class="n">batch</span> <span class="ow">in</span> <span class="n">batches</span>
+            <span class="p">])))</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../collector.html">CollecTor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../directory.html">Tor Directory Protocol</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../index.html">Documentation overview</a><ul>
+  <li><a href="../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

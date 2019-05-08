@@ -1,0 +1,195 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Detached Signatures &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Network Statuses" href="network_status.html" />
+    <link rel="prev" title="Directory Documents" href="document.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-bushel.directory.detached_signature">
+<span id="detached-signatures"></span><h1>Detached Signatures<a class="headerlink" href="#module-bushel.directory.detached_signature" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="bushel.directory.detached_signature.DetachedSignature">
+<em class="property">class </em><code class="descclassname">bushel.directory.detached_signature.</code><code class="descname">DetachedSignature</code><span class="sig-paren">(</span><em>raw_content</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/detached_signature.html#DetachedSignature"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.detached_signature.DetachedSignature" title="Permalink to this definition">¶</a></dt>
+<dd><p>Detached signature documents are used as part of the consensus process for
+the Tor directory protocol version 3 (§3.10 <a class="reference internal" href="../references.html#dir-spec" id="id1"><span>[dir-spec]</span></a>). Once an authority
+has computed and signed a consensus network status, it should send its
+detached signature to each other authority in an HTTP POST request. All of
+the detached signatures it knows for consensus status should be available
+at:</p>
+<p><code class="docutils literal notranslate"><span class="pre">http://&lt;hostname&gt;/tor/status-vote/next/consensus-signatures.z</span></code></p>
+<p>Assuming full connectivity, every authority should compute and sign the
+same consensus including any flavors in each period.  Therefore, it
+isn’t necessary to download the consensus or any flavors of it computed
+by each authority; instead, the authorities only push/fetch each
+others’ signatures.</p>
+<p>These documents are interesting for Tor Metrics as they allow detection of
+new consensus flavors automatically, allowing them to be archived as soon
+as they are available even if we are not yet able to parse them.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>consensus_digest</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – digest of the consensus</p></li>
+<li><p><strong>valid_after</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)"><em>datetime</em></a>) – the valid-after time</p></li>
+<li><p><strong>fresh_until</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)"><em>datetime</em></a>) – the fresh-until time</p></li>
+<li><p><strong>valid_until</strong> (<a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)"><em>datetime</em></a>) – the valid-until time</p></li>
+<li><p><strong>additional_digests</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference internal" href="#bushel.directory.detached_signature.DetachedSignatureAdditionalDigest" title="bushel.directory.detached_signature.DetachedSignatureAdditionalDigest"><em>DetachedSignatureAdditionalDigest</em></a><em>)</em>) – additional digests</p></li>
+<li><p><strong>additional_signatures</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference internal" href="#bushel.directory.detached_signature.DetachedSignatureAdditionalSignature" title="bushel.directory.detached_signature.DetachedSignatureAdditionalSignature"><em>DetachedSignatureAdditionalSignature</em></a><em>)</em>) – additional signatures</p></li>
+<li><p><strong>direcory_signatures</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#list" title="(in Python v3.7)"><em>list</em></a><em>(</em><a class="reference internal" href="network_status.html#bushel.directory.network_status.NetworkStatusConsensusDirectorySignature" title="bushel.directory.network_status.NetworkStatusConsensusDirectorySignature"><em>NetworkStatusConsensusDirectorySignature</em></a><em>)</em>) – directory signatures</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.detached_signature.DetachedSignatureAdditionalDigest">
+<em class="property">class </em><code class="descclassname">bushel.directory.detached_signature.</code><code class="descname">DetachedSignatureAdditionalDigest</code><a class="reference internal" href="../_modules/bushel/directory/detached_signature.html#DetachedSignatureAdditionalDigest"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.detached_signature.DetachedSignatureAdditionalDigest" title="Permalink to this definition">¶</a></dt>
+<dd><p>Additional signatures as found in <a class="reference internal" href="#bushel.directory.detached_signature.DetachedSignature" title="bushel.directory.detached_signature.DetachedSignature"><code class="xref py py-class docutils literal notranslate"><span class="pre">DetachedSignature</span></code></a> s, defined in
+the Tor directory protocol version 3 (<a class="reference internal" href="../references.html#dir-spec" id="id2"><span>[dir-spec]</span></a> §3.10).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>flavor</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – flavor of the additional consensus</p></li>
+<li><p><strong>algname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – name of algorithm used for the digest</p></li>
+<li><p><strong>digest</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – the digest of the document as signed</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.detached_signature.DetachedSignatureAdditionalSignature">
+<em class="property">class </em><code class="descclassname">bushel.directory.detached_signature.</code><code class="descname">DetachedSignatureAdditionalSignature</code><a class="reference internal" href="../_modules/bushel/directory/detached_signature.html#DetachedSignatureAdditionalSignature"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.detached_signature.DetachedSignatureAdditionalSignature" title="Permalink to this definition">¶</a></dt>
+<dd><p>Additional signatures as found in <a class="reference internal" href="#bushel.directory.detached_signature.DetachedSignature" title="bushel.directory.detached_signature.DetachedSignature"><code class="xref py py-class docutils literal notranslate"><span class="pre">DetachedSignature</span></code></a> s, defined in
+the Tor directory protocol version 3 (<a class="reference internal" href="../references.html#dir-spec" id="id3"><span>[dir-spec]</span></a> §3.10).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>flavor</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – flavor of the additional consensus</p></li>
+<li><p><strong>algname</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – name of algorithm used for the digest</p></li>
+<li><p><strong>identity</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – hex-encoded digest of the authority identity key of the signing
+authority</p></li>
+<li><p><strong>signing_key_digest</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – hex-encoded digest of the current authority signing key of the signing
+authority</p></li>
+<li><p><strong>signature</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – RSA signature of the OAEP+-padded SHA256 digest of the additional
+consensus</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../collector.html">CollecTor</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../directory.html">Tor Directory Protocol</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="document.html">Directory Documents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remote.html">Directory Client</a></li>
+<li class="toctree-l2"><a class="reference internal" href="voting.html">Directory Voting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../directory.html">Tor Directory Protocol</a><ul>
+  <li><a href="document.html">Directory Documents</a><ul>
+      <li>Previous: <a href="document.html" title="previous chapter">Directory Documents</a></li>
+      <li>Next: <a href="network_status.html" title="next chapter">Network Statuses</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/directory/detached_signatures.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

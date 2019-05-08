@@ -1,0 +1,210 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>bushel.directory.network_status &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for bushel.directory.network_status</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">datetime</span>
+<span class="kn">import</span> <span class="nn">re</span>
+
+<span class="kn">from</span> <span class="nn">bushel.directory.document</span> <span class="k">import</span> <span class="n">DirectoryDocument</span>
+<span class="kn">from</span> <span class="nn">bushel.directory.document</span> <span class="k">import</span> <span class="n">expect_arguments</span>
+<span class="kn">from</span> <span class="nn">bushel.directory.document</span> <span class="k">import</span> <span class="n">parse_timestamp</span>
+
+
+<div class="viewcode-block" id="NetworkStatusConsensusDirectorySignature"><a class="viewcode-back" href="../../../directory/network_status.html#bushel.directory.network_status.NetworkStatusConsensusDirectorySignature">[docs]</a><span class="k">class</span> <span class="nc">NetworkStatusConsensusDirectorySignature</span><span class="p">(</span><span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span>
+      <span class="s2">&quot;NetworkStatusConsensusDirectorySignature&quot;</span><span class="p">,</span> <span class="p">[</span><span class="s1">&#39;algorithm&#39;</span><span class="p">,</span> <span class="s1">&#39;identity&#39;</span><span class="p">,</span>
+                                                   <span class="s1">&#39;signing_key_digest&#39;</span><span class="p">,</span>
+                                                   <span class="s1">&#39;signature&#39;</span><span class="p">])):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Directory signatures as found in :class:`NetworkStatusConsensus`, defined</span>
+<span class="sd">    in the Tor directory protocol version 3 ([dir-spec]_ §3.4.1).</span>
+
+<span class="sd">    For the signature, we take the hash through the _space_ after</span>
+<span class="sd">    ``directory-signature``, not the newline: this ensures that all authorities</span>
+<span class="sd">    sign the same thing.</span>
+
+<span class="sd">    :var str algorithm:</span>
+<span class="sd">        one of &quot;sha1&quot; or &quot;sha256&quot;, or *None* if this was not present</span>
+<span class="sd">    :var str identity:</span>
+<span class="sd">        hex-encoded digest of the authority identity key of the signing</span>
+<span class="sd">        authority</span>
+<span class="sd">    :var str signing_key_digest: </span>
+<span class="sd">        hex-encoded digest of the current authority signing key of the signing</span>
+<span class="sd">        authority</span>
+<span class="sd">    :var bytes signature:</span>
+<span class="sd">        signature of the status document, with the initial item</span>
+<span class="sd">        &quot;network-status-version&quot;, and the signature item &quot;directory-signature&quot;,</span>
+<span class="sd">        using the signing key</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
+
+
+<div class="viewcode-block" id="NetworkStatusConsensus"><a class="viewcode-back" href="../../../directory/network_status.html#bushel.directory.network_status.NetworkStatusConsensus">[docs]</a><span class="k">class</span> <span class="nc">NetworkStatusConsensus</span><span class="p">(</span><span class="n">DirectoryDocument</span><span class="p">):</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw_content</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">raw_content</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">PARSE_FUNCTIONS</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;network-status-version&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_network_status_version</span><span class="p">,</span>
+            <span class="s2">&quot;vote-status&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_vote_status</span><span class="p">,</span>
+            <span class="s2">&quot;consensus-method&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_consensus_method</span><span class="p">,</span>
+            <span class="s2">&quot;valid-after&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_valid_after</span><span class="p">,</span>
+            <span class="s2">&quot;fresh-until&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_fresh_until</span><span class="p">,</span>
+            <span class="s2">&quot;valid-until&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_valid_until</span><span class="p">,</span>
+            <span class="s2">&quot;voting-delay&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_voting_delay</span><span class="p">,</span>
+            <span class="s2">&quot;client-versions&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_client_versions</span><span class="p">,</span>
+            <span class="s2">&quot;server-versions&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_server_versions</span><span class="p">,</span>
+            <span class="s2">&quot;recommended-client-protocols&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_recommended_client_protocols</span><span class="p">,</span>
+            <span class="s2">&quot;recommended-relay-protocols&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_recommended_relay_protocols</span><span class="p">,</span>
+        <span class="p">}</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_network_status_version</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">network_status_version</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_vote_status</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vote_status</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_consensus_method</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">consensus_method</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_valid_after</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">valid_after</span> <span class="o">=</span> <span class="n">parse_timestamp</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_fresh_until</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fresh_until</span> <span class="o">=</span> <span class="n">parse_timestamp</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_valid_until</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">valid_until</span> <span class="o">=</span> <span class="n">parse_timestamp</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_voting_delay</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">vote_seconds</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">dist_seconds</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_client_versions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">client_versions</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">True</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_server_versions</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">server_versions</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_known_flags</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">known_flags</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_recommended_client_protocols</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">recommended_client_protocols</span> <span class="o">=</span> <span class="p">{</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="p">[</span><span class="n">y</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">]}</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">9</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_recommended_relay_protocols</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">recommended_relay_protocols</span> <span class="o">=</span> <span class="p">{</span><span class="n">x</span><span class="p">[</span><span class="mi">0</span><span class="p">]:</span> <span class="n">x</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="k">for</span> <span class="n">x</span> <span class="ow">in</span> <span class="p">[</span><span class="n">y</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;=&quot;</span><span class="p">)</span> <span class="k">for</span> <span class="n">y</span> <span class="ow">in</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">]}</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../collector.html">CollecTor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../directory.html">Tor Directory Protocol</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

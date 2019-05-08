@@ -1,0 +1,260 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>bushel.directory.detached_signature &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../../../_static/jquery.js"></script>
+    <script type="text/javascript" src="../../../_static/underscore.js"></script>
+    <script type="text/javascript" src="../../../_static/doctools.js"></script>
+    <script type="text/javascript" src="../../../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for bushel.directory.detached_signature</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">collections</span>
+<span class="kn">import</span> <span class="nn">logging</span>
+
+<span class="kn">from</span> <span class="nn">bushel.directory.document</span> <span class="k">import</span> <span class="n">DirectoryDocument</span>
+<span class="kn">from</span> <span class="nn">bushel.directory.document</span> <span class="k">import</span> <span class="n">expect_arguments</span>
+<span class="kn">from</span> <span class="nn">bushel.directory.document</span> <span class="k">import</span> <span class="n">parse_timestamp</span>
+<span class="kn">from</span> <span class="nn">bushel.directory.network_status</span> <span class="k">import</span> <span class="n">NetworkStatusConsensusDirectorySignature</span>
+
+<span class="n">LOG</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="s2">&quot;bushel&quot;</span><span class="p">)</span>
+
+<div class="viewcode-block" id="DetachedSignatureAdditionalDigest"><a class="viewcode-back" href="../../../directory/detached_signatures.html#bushel.directory.detached_signature.DetachedSignatureAdditionalDigest">[docs]</a><span class="k">class</span> <span class="nc">DetachedSignatureAdditionalDigest</span><span class="p">(</span>
+      <span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;DetachedSignatureAdditionalSignature&#39;</span><span class="p">,</span>
+                             <span class="p">[</span><span class="s1">&#39;flavor&#39;</span><span class="p">,</span> <span class="s1">&#39;algname&#39;</span><span class="p">,</span> <span class="s1">&#39;digest&#39;</span><span class="p">])):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Additional signatures as found in :class:`DetachedSignature` s, defined in</span>
+<span class="sd">    the Tor directory protocol version 3 ([dir-spec]_ §3.10).</span>
+
+<span class="sd">    :var str flavor: flavor of the additional consensus</span>
+<span class="sd">    :var str algname: name of algorithm used for the digest</span>
+<span class="sd">    :var str digest: the digest of the document as signed</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
+
+<div class="viewcode-block" id="DetachedSignatureAdditionalSignature"><a class="viewcode-back" href="../../../directory/detached_signatures.html#bushel.directory.detached_signature.DetachedSignatureAdditionalSignature">[docs]</a><span class="k">class</span> <span class="nc">DetachedSignatureAdditionalSignature</span><span class="p">(</span>
+      <span class="n">collections</span><span class="o">.</span><span class="n">namedtuple</span><span class="p">(</span><span class="s1">&#39;DetachedSignatureAdditionalSignature&#39;</span><span class="p">,</span>
+                             <span class="p">[</span><span class="s1">&#39;flavor&#39;</span><span class="p">,</span> <span class="s1">&#39;algname&#39;</span><span class="p">,</span> <span class="s1">&#39;identity&#39;</span><span class="p">,</span>
+                              <span class="s1">&#39;signing_key_digest&#39;</span><span class="p">,</span> <span class="s1">&#39;signature&#39;</span><span class="p">])):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Additional signatures as found in :class:`DetachedSignature` s, defined in</span>
+<span class="sd">    the Tor directory protocol version 3 ([dir-spec]_ §3.10).</span>
+
+<span class="sd">    :var str flavor: flavor of the additional consensus</span>
+<span class="sd">    :var str algname: name of algorithm used for the digest</span>
+<span class="sd">    :var str identity:</span>
+<span class="sd">        hex-encoded digest of the authority identity key of the signing</span>
+<span class="sd">        authority</span>
+<span class="sd">    :var str signing_key_digest:</span>
+<span class="sd">        hex-encoded digest of the current authority signing key of the signing</span>
+<span class="sd">        authority</span>
+<span class="sd">    :var bytes signature:</span>
+<span class="sd">        RSA signature of the OAEP+-padded SHA256 digest of the additional</span>
+<span class="sd">        consensus</span>
+<span class="sd">    &quot;&quot;&quot;</span></div>
+
+<div class="viewcode-block" id="DetachedSignature"><a class="viewcode-back" href="../../../directory/detached_signatures.html#bushel.directory.detached_signature.DetachedSignature">[docs]</a><span class="k">class</span> <span class="nc">DetachedSignature</span><span class="p">(</span><span class="n">DirectoryDocument</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Detached signature documents are used as part of the consensus process for</span>
+<span class="sd">    the Tor directory protocol version 3 (§3.10 [dir-spec]_). Once an authority</span>
+<span class="sd">    has computed and signed a consensus network status, it should send its</span>
+<span class="sd">    detached signature to each other authority in an HTTP POST request. All of</span>
+<span class="sd">    the detached signatures it knows for consensus status should be available</span>
+<span class="sd">    at:</span>
+
+<span class="sd">    ``http://&lt;hostname&gt;/tor/status-vote/next/consensus-signatures.z``</span>
+
+<span class="sd">    Assuming full connectivity, every authority should compute and sign the</span>
+<span class="sd">    same consensus including any flavors in each period.  Therefore, it</span>
+<span class="sd">    isn&#39;t necessary to download the consensus or any flavors of it computed</span>
+<span class="sd">    by each authority; instead, the authorities only push/fetch each</span>
+<span class="sd">    others&#39; signatures.</span>
+
+<span class="sd">    These documents are interesting for Tor Metrics as they allow detection of</span>
+<span class="sd">    new consensus flavors automatically, allowing them to be archived as soon</span>
+<span class="sd">    as they are available even if we are not yet able to parse them.</span>
+
+<span class="sd">    :var str consensus_digest: digest of the consensus</span>
+<span class="sd">    :var ~datetime.datetime valid_after: the valid-after time</span>
+<span class="sd">    :var ~datetime.datetime fresh_until: the fresh-until time</span>
+<span class="sd">    :var ~datetime.datetime valid_until: the valid-until time</span>
+<span class="sd">    :var list(DetachedSignatureAdditionalDigest) additional_digests: additional digests</span>
+<span class="sd">    :var list(DetachedSignatureAdditionalSignature) additional_signatures: additional signatures</span>
+<span class="sd">    :var list(NetworkStatusConsensusDirectorySignature) direcory_signatures: directory signatures</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="k">def</span> <span class="nf">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">raw_content</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">raw_content</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">PARSE_FUNCTIONS</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="s2">&quot;consensus-digest&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_consensus_digest</span><span class="p">,</span>
+            <span class="s2">&quot;valid-after&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_valid_after</span><span class="p">,</span>
+            <span class="s2">&quot;fresh-until&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_fresh_until</span><span class="p">,</span>
+            <span class="s2">&quot;valid-until&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_valid_until</span><span class="p">,</span>
+            <span class="s2">&quot;additional-digest&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_additional_digest</span><span class="p">,</span>
+            <span class="s2">&quot;additional-signature&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_additional_signature</span><span class="p">,</span>
+            <span class="s2">&quot;directory-signature&quot;</span><span class="p">:</span> <span class="bp">self</span><span class="o">.</span><span class="n">parse_directory_signature</span><span class="p">,</span>
+        <span class="p">}</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">consensus_digest</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">valid_after</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fresh_until</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">valid_until</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional_digests</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional_signatures</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">directory_signatures</span> <span class="o">=</span> <span class="p">[]</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_consensus_digest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">consensus_digest</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_valid_after</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">valid_after</span> <span class="o">=</span> <span class="n">parse_timestamp</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_fresh_until</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">fresh_until</span> <span class="o">=</span> <span class="n">parse_timestamp</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_valid_until</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">valid_until</span> <span class="o">=</span> <span class="n">parse_timestamp</span><span class="p">(</span><span class="n">item</span><span class="p">)</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_additional_digest</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional_digests</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">DetachedSignatureAdditionalDigest</span><span class="p">(</span>
+            <span class="o">*</span><span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[:</span><span class="mi">3</span><span class="p">]))</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_additional_signature</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="c1"># TODO: Expect objects</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">objects</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Got more than one object on an additional &quot;</span>
+                               <span class="s2">&quot;signature. I don&#39;t know what to do.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">objects</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">keyword</span> <span class="o">!=</span> <span class="s2">&quot;SIGNATURE&quot;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Expected object with keyword SIGNATURE on an &quot;</span>
+                               <span class="s2">&quot;additional-signature object but found &quot;</span>
+                               <span class="n">f</span><span class="s2">&quot;</span><span class="si">{item.objects[0].keyword}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional_signatures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">DetachedSignatureAdditionalSignature</span><span class="p">(</span>
+            <span class="o">*</span><span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[:</span><span class="mi">4</span><span class="p">],</span> <span class="n">item</span><span class="o">.</span><span class="n">objects</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
+
+    <span class="nd">@expect_arguments</span><span class="p">(</span><span class="mi">2</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+    <span class="k">def</span> <span class="nf">parse_directory_signature</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">item</span><span class="p">):</span>
+        <span class="c1"># TODO: Expect objects</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">objects</span><span class="p">)</span> <span class="o">!=</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Got more than one object on an additional &quot;</span>
+                               <span class="s2">&quot;signature. I don&#39;t know what to do.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">item</span><span class="o">.</span><span class="n">objects</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">keyword</span> <span class="o">!=</span> <span class="s2">&quot;SIGNATURE&quot;</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;Expected object with keyword SIGNATURE on an &quot;</span>
+                               <span class="s2">&quot;additional-signature object but found &quot;</span>
+                               <span class="n">f</span><span class="s2">&quot;</span><span class="si">{item.objects[0].keyword}</span><span class="s2">.&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">)</span> <span class="ow">is</span> <span class="mi">2</span><span class="p">:</span>
+            <span class="n">arguments</span> <span class="o">=</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="n">arguments</span> <span class="o">=</span> <span class="n">item</span><span class="o">.</span><span class="n">arguments</span><span class="p">[:</span><span class="mi">3</span><span class="p">]</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">additional_signatures</span><span class="o">.</span><span class="n">append</span><span class="p">(</span>
+            <span class="n">NetworkStatusConsensusDirectorySignature</span><span class="p">(</span>
+                <span class="o">*</span><span class="n">arguments</span><span class="p">,</span> <span class="n">item</span><span class="o">.</span><span class="n">objects</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">data</span><span class="p">))</span>
+
+    <span class="k">def</span> <span class="nf">is_valid</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># TODO: Validate the document</span>
+        <span class="k">pass</span>
+
+    <span class="k">def</span> <span class="nf">to_stem</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="kn">from</span> <span class="nn">stem.descriptor.networkstatus</span> <span class="k">import</span> <span class="n">DetachedSignature</span> <span class="k">as</span> <span class="n">StemDetachedSignature</span>
+        <span class="k">return</span> <span class="n">StemDetachedSignature</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">get_bytes</span><span class="p">())</span></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../collector.html">CollecTor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../directory.html">Tor Directory Protocol</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

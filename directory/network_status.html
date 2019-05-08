@@ -1,0 +1,154 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Network Statuses &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Server Descriptors" href="server_descriptor.html" />
+    <link rel="prev" title="Detached Signatures" href="detached_signatures.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-bushel.directory.network_status">
+<span id="network-statuses"></span><h1>Network Statuses<a class="headerlink" href="#module-bushel.directory.network_status" title="Permalink to this headline">¶</a></h1>
+<dl class="class">
+<dt id="bushel.directory.network_status.NetworkStatusConsensus">
+<em class="property">class </em><code class="descclassname">bushel.directory.network_status.</code><code class="descname">NetworkStatusConsensus</code><span class="sig-paren">(</span><em>raw_content</em><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/network_status.html#NetworkStatusConsensus"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.network_status.NetworkStatusConsensus" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="class">
+<dt id="bushel.directory.network_status.NetworkStatusConsensusDirectorySignature">
+<em class="property">class </em><code class="descclassname">bushel.directory.network_status.</code><code class="descname">NetworkStatusConsensusDirectorySignature</code><a class="reference internal" href="../_modules/bushel/directory/network_status.html#NetworkStatusConsensusDirectorySignature"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.network_status.NetworkStatusConsensusDirectorySignature" title="Permalink to this definition">¶</a></dt>
+<dd><p>Directory signatures as found in <a class="reference internal" href="#bushel.directory.network_status.NetworkStatusConsensus" title="bushel.directory.network_status.NetworkStatusConsensus"><code class="xref py py-class docutils literal notranslate"><span class="pre">NetworkStatusConsensus</span></code></a>, defined
+in the Tor directory protocol version 3 (<a class="reference internal" href="../references.html#dir-spec" id="id1"><span>[dir-spec]</span></a> §3.4.1).</p>
+<p>For the signature, we take the hash through the _space_ after
+<code class="docutils literal notranslate"><span class="pre">directory-signature</span></code>, not the newline: this ensures that all authorities
+sign the same thing.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Variables</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>algorithm</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – one of “sha1” or “sha256”, or <em>None</em> if this was not present</p></li>
+<li><p><strong>identity</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – hex-encoded digest of the authority identity key of the signing
+authority</p></li>
+<li><p><strong>signing_key_digest</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – hex-encoded digest of the current authority signing key of the signing
+authority</p></li>
+<li><p><strong>signature</strong> (<a class="reference external" href="https://docs.python.org/3/library/stdtypes.html#bytes" title="(in Python v3.7)"><em>bytes</em></a>) – signature of the status document, with the initial item
+“network-status-version”, and the signature item “directory-signature”,
+using the signing key</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../collector.html">CollecTor</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../directory.html">Tor Directory Protocol</a><ul class="current">
+<li class="toctree-l2 current"><a class="reference internal" href="document.html">Directory Documents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remote.html">Directory Client</a></li>
+<li class="toctree-l2"><a class="reference internal" href="voting.html">Directory Voting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../directory.html">Tor Directory Protocol</a><ul>
+  <li><a href="document.html">Directory Documents</a><ul>
+      <li>Previous: <a href="detached_signatures.html" title="previous chapter">Detached Signatures</a></li>
+      <li>Next: <a href="server_descriptor.html" title="next chapter">Server Descriptors</a></li>
+  </ul></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/directory/network_status.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

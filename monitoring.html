@@ -1,0 +1,166 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Monitoring &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script type="text/javascript" src="_static/jquery.js"></script>
+    <script type="text/javascript" src="_static/underscore.js"></script>
+    <script type="text/javascript" src="_static/doctools.js"></script>
+    <script type="text/javascript" src="_static/language_data.js"></script>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="check_collector" href="monitoring/check_collector.html" />
+    <link rel="prev" title="Directory Downloader" href="downloader.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="monitoring">
+<h1>Monitoring<a class="headerlink" href="#monitoring" title="Permalink to this headline">¶</a></h1>
+<p>For bundled plugins for Nagios see:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="monitoring/check_collector.html">check_collector</a></li>
+</ul>
+</div>
+<div class="section" id="module-bushel.monitoring">
+<span id="monitoring-helpers"></span><h2>Monitoring Helpers<a class="headerlink" href="#module-bushel.monitoring" title="Permalink to this headline">¶</a></h2>
+<p>This module contains tools for creating plugins for monitoring applications
+that are compatible with Nagios plugins, such as Nagios or Icinga.</p>
+<dl class="data">
+<dt id="bushel.monitoring.NagiosStatusCode">
+<code class="descclassname">bushel.monitoring.</code><code class="descname">NagiosStatusCode</code><a class="headerlink" href="#bushel.monitoring.NagiosStatusCode" title="Permalink to this definition">¶</a></dt>
+<dd><p>Derived type to represent the exit code of a Nagios plugin.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="bushel.monitoring.NagiosResponse">
+<code class="descclassname">bushel.monitoring.</code><code class="descname">NagiosResponse</code><a class="headerlink" href="#bushel.monitoring.NagiosResponse" title="Permalink to this definition">¶</a></dt>
+<dd><p>Alias for <code class="code docutils literal notranslate"><span class="pre">typing.Tuple[NagiosStatusCode,</span> <span class="pre">str]</span></code> to represent the exit
+code and message for a Nagios plugin.</p>
+</dd></dl>
+
+<dl class="data">
+<dt id="bushel.monitoring.OK">
+<code class="descclassname">bushel.monitoring.</code><code class="descname">OK</code><a class="headerlink" href="#bushel.monitoring.OK" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="data">
+<dt id="bushel.monitoring.WARNING">
+<code class="descclassname">bushel.monitoring.</code><code class="descname">WARNING</code><a class="headerlink" href="#bushel.monitoring.WARNING" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="data">
+<dt id="bushel.monitoring.CRITICAL">
+<code class="descclassname">bushel.monitoring.</code><code class="descname">CRITICAL</code><a class="headerlink" href="#bushel.monitoring.CRITICAL" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="data">
+<dt id="bushel.monitoring.UNKNOWN">
+<code class="descclassname">bushel.monitoring.</code><code class="descname">UNKNOWN</code><a class="headerlink" href="#bushel.monitoring.UNKNOWN" title="Permalink to this definition">¶</a></dt>
+<dd><p>Standard Nagios plugin return codes. These constants are instances of
+<a class="reference internal" href="#bushel.monitoring.NagiosStatusCode" title="bushel.monitoring.NagiosStatusCode"><code class="xref py py-data docutils literal notranslate"><span class="pre">NagiosStatusCode</span></code></a>.</p>
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="collector.html">CollecTor</a></li>
+<li class="toctree-l1"><a class="reference internal" href="directory.html">Tor Directory Protocol</a></li>
+<li class="toctree-l1"><a class="reference internal" href="downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Monitoring</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="monitoring/check_collector.html">check_collector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-bushel.monitoring">Monitoring Helpers</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="downloader.html" title="previous chapter">Directory Downloader</a></li>
+      <li>Next: <a href="monitoring/check_collector.html" title="next chapter">check_collector</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/monitoring.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

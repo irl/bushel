@@ -1,0 +1,144 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>Directory Voting &#8212; bushel 0.0.0a documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
+    <script type="text/javascript" id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script type="text/javascript" src="../_static/jquery.js"></script>
+    <script type="text/javascript" src="../_static/underscore.js"></script>
+    <script type="text/javascript" src="../_static/doctools.js"></script>
+    <script type="text/javascript" src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Directory Downloader" href="../downloader.html" />
+    <link rel="prev" title="Directory Client" href="remote.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-bushel.directory.voting">
+<span id="directory-voting"></span><h1>Directory Voting<a class="headerlink" href="#module-bushel.directory.voting" title="Permalink to this headline">¶</a></h1>
+<p>An implementation of the voting process used in the Tor directory protocol,
+version 3 <a class="reference internal" href="../references.html#dir-spec" id="id1"><span>[dir-spec]</span></a>.</p>
+<dl class="function">
+<dt id="bushel.directory.voting.valid_after_now_guess">
+<code class="descclassname">bushel.directory.voting.</code><code class="descname">valid_after_now_guess</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="../_modules/bushel/directory/voting.html#valid_after_now_guess"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#bushel.directory.voting.valid_after_now_guess" title="Permalink to this definition">¶</a></dt>
+<dd><p>Takes a good guess at the valid-after time of the latest consensus. There
+is an assumption that there is a new consensus every hour and that it is
+valid from the top of the hour. Different valid-after times are compliant
+with the protocol however, and so this may be wrong.</p>
+<p>The voting timeline is described in §1.4 of the Tor directory protocol,
+version 3 (<a class="reference internal" href="../references.html#dir-spec" id="id2"><span>[dir-spec]</span></a>).</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The start of the current hour in UTC.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3/library/datetime.html#datetime.datetime" title="(in Python v3.7)">datetime</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">bushel</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../archive.html">Directory Archive</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../bandwidth.html">Bandwidth Scanner</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../collector.html">CollecTor</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../directory.html">Tor Directory Protocol</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="document.html">Directory Documents</a></li>
+<li class="toctree-l2"><a class="reference internal" href="remote.html">Directory Client</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">Directory Voting</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../downloader.html">Directory Downloader</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../monitoring.html">Monitoring</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../plugins.html">Plugin API</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../references.html">References</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../directory.html">Tor Directory Protocol</a><ul>
+      <li>Previous: <a href="remote.html" title="previous chapter">Directory Client</a></li>
+      <li>Next: <a href="../downloader.html" title="next chapter">Directory Downloader</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3>Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script type="text/javascript">$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2018, Tor Project.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.0.1</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/directory/voting.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
