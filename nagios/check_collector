@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+
+import datetime
+import sys
+import typing
+import json
+
+import requests
+
+from bushel.collector.remote import get_index
+from bushel.collector.remote import CollecTorIndex
+from bushel.monitoring import nagios_check
+from bushel.monitoring import utc_datetime_too_old
+from bushel.monitoring import NagiosResponse
+
+@nagios_check
+def check_collector_index() -> NagiosResponse:
+    if len(sys.argv) != 2:
+        raise RuntimeError("No hostname specified.")
+    req = requests.get("https://" + sys.argv[1] + "/index/index.json")
+    index = json.loads(req.text)
+    index_dt = datetime.datetime.strptime(index["index_created"],
+                                          "%Y-%m-%d %H:%M")
+    dts = {"index_created": index_dt}
+    return utc_datetime_too_old(dts, 15 * 60, 20 * 60)
+
+def parse_collector_filename_timestamp(filename: str) -> datetime.datetime:
+    return datetime.datetime.strptime(filename[:19], "%Y-%m-%d-%H-%M-%S")
+
+def latest_filename_in_path(index: CollecTorIndex, path: str) -> str:
+    return sorted(
+        [x["path"] for x in index.raw_directory_contents(path)])[-1]
+
+def check_collector_latest_recent(
+        name: str, paths: typing.Iterable[str]) -> NagiosResponse:
+    if len(sys.argv) != 2:
+        raise RuntimeError("No hostname specified.")
+    index = get_index(sys.argv[1])
+    latest_filenames = [latest_filename_in_path(index, path) for path in paths]
+    dts = {
+        f"{name}:{filename}": parse_collector_filename_timestamp(filename)
+        for filename in latest_filenames
+    }
+    return utc_datetime_too_old(dts, 80 * 60, 90 * 60)
+
+@nagios_check
+def check_collector_latest_recent_bridgedescs() -> NagiosResponse:
+    return check_collector_latest_recent("bridgedescs", [
+        "recent/bridge-descriptors/server-descriptors",
+        "recent/bridge-descriptors/extra-infos",
+        # TODO: The bridge statuses use a different timestamp format
+        # "recent/bridge-descriptors/statuses"
+    ])
+
+@nagios_check
+def check_collector_latest_recent_exitlists() -> NagiosResponse:
+    return check_collector_latest_recent("exitlists", ["recent/exit-lists"])
+
+@nagios_check
+def check_collector_latest_recent_relaydescs() -> NagiosResponse:
+    return check_collector_latest_recent("relay_consensus", [
+        "recent/relay-descriptors/consensuses",
+        "recent/relay-descriptors/extra-infos",
+        "recent/relay-descriptors/microdescs/consensus-microdesc",
+        "recent/relay-descriptors/microdescs/micro",
+        "recent/relay-descriptors/server-descriptors",
+        "recent/relay-descriptors/votes",
+    ])
+
+# TODO: OnionPerf and webstats use different formats too
+
+CHECKS = {
+    "index": check_collector_index,
+    "bridgedescs": check_collector_latest_recent_bridgedescs,
+    "exitlists": check_collector_latest_recent_exitlists,
+    "relaydescs": check_collector_latest_recent_relaydescs,
+}
+
+def run_cli_mode():
+    for check in CHECKS.values():
+        try:
+            check()
+        except SystemExit:
+            pass
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("usage: check_collector hostname [module]")
+        sys.exit(1)
+    if len(sys.argv) < 3:
+        run_cli_mode()
+        sys.exit(0)
+    else:
+        CHECKS[sys.argv[2]]()

@@ -20,6 +20,7 @@ want to look at `stem <https://stem.torproject.org/>`_.
    collector
    directory
    downloader
+   monitoring
    plugins
    references
 

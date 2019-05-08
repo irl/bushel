@@ -1,6 +1,23 @@
 """
-Monitoring.
+This module contains tools for creating plugins for monitoring applications
+that are compatible with Nagios plugins, such as Nagios or Icinga.
 
+.. data:: NagiosStatusCode
+
+   Derived type to represent the exit code of a Nagios plugin.
+
+.. data:: NagiosResponse
+
+   Alias for :code:`typing.Tuple[NagiosStatusCode, str]` to represent the exit
+   code and message for a Nagios plugin.
+
+.. data:: OK
+.. data:: WARNING
+.. data:: CRITICAL
+.. data:: UNKNOWN
+
+   Standard Nagios plugin return codes. These constants are instances of
+   :data:`NagiosStatusCode`.
 """
 
 import datetime
