@@ -15,8 +15,6 @@ from bushel.monitoring import NagiosResponse
 
 @nagios_check
 def check_collector_index() -> NagiosResponse:
-    if len(sys.argv) != 2:
-        raise RuntimeError("No hostname specified.")
     req = requests.get("https://" + sys.argv[1] + "/index/index.json")
     index = json.loads(req.text)
     index_dt = datetime.datetime.strptime(index["index_created"],
