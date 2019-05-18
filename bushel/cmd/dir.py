@@ -9,11 +9,12 @@ from bushel.directory.remote import detached_signature
 def cmd_dir(args):
     sys.stdout.buffer.write(b"not implemented")
 
-def cmd_consensus(args):
+def cmd_detached_signature(args):
     sys.stdout.buffer.write(detached_signature())
 
 def cmd_consensus(args):
-    sys.stdout.buffer.write(consensus())
+    flavor = args.flavor if "flavor" in args else None
+    sys.stdout.buffer.write(consensus(flavor=flavor))
 
 def cmd_itemize(args):
     data = sys.stdin.buffer.read()
@@ -41,11 +42,13 @@ class DirCommand(PluggableCommand):
 
         parser_consensus = dir_subparsers.add_parser(
             "consensus", help="Fetch a consensus from a directory server")
+        parser_consensus.add_argument("--flavor", metavar="FLAVOR",
+                                      help="Flavor of consensus to fetch")
         parser_consensus.set_defaults(func=cmd_consensus)
 
         parser_detached_signature = dir_subparsers.add_parser(
             "detached-signature", help="Fetch detached signatures from a directory server (next)")
-        parser_detached_signature.set_defaults(func=cmd_consensus)
+        parser_detached_signature.set_defaults(func=cmd_detached_signature)
 
         parser_itemize = dir_subparsers.add_parser(
             "itemize", help="Tokenize a directory protocol document")
