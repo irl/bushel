@@ -31,8 +31,6 @@ def latest_filename_in_path(index: CollecTorIndex, path: str) -> str:
 
 def check_collector_latest_recent(
         name: str, paths: typing.Iterable[str]) -> NagiosResponse:
-    if len(sys.argv) != 2:
-        raise RuntimeError("No hostname specified.")
     index = get_index(sys.argv[1])
     latest_filenames = [latest_filename_in_path(index, path) for path in paths]
     dts = {
